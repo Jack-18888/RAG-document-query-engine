@@ -1,0 +1,459 @@
+{
+  "version": 1,
+  "project": "RAG Document Query Engine — Backend",
+  "roadmap": "docs/roadmap/roadmap-1.md",
+  "goal": "Complete the v1 backend: ingest PDF/docx/HTML/Markdown via background jobs, answer questions with source citations via hybrid retrieval + DeepSeek, and manage documents, with the full test suite green and docs in sync.",
+  "phases": [
+    { "id": 1, "name": "Foundation", "focus": "SQLite schema + FTS5 + repositories" },
+    { "id": 2, "name": "Parsers", "focus": "per-format text/structure extraction" },
+    { "id": 3, "name": "Chunking", "focus": "structure-aware chunker" },
+    { "id": 4, "name": "Embeddings & vectors", "focus": "Pinecone client, embedding, vector repo, reranker" },
+    { "id": 5, "name": "Ingestion jobs", "focus": "thread-pool worker, retries, progress" },
+    { "id": 6, "name": "Retrieval", "focus": "vector + BM25 + RRF + rerank orchestration" },
+    { "id": 7, "name": "Generation", "focus": "DeepSeek client, prompts, answer assembly" },
+    { "id": 8, "name": "API layer", "focus": "all endpoints wiring the above" },
+    { "id": 9, "name": "Hardening & docs", "focus": "error semantics, limits, docs sync, final verification" }
+  ],
+  "tasks": [
+    {
+      "id": "T01",
+      "name": "Database schema and initialization",
+      "description": "Define the SQLite schema (documents, chunks, jobs tables) plus an FTS5 virtual table over chunk text for BM25 keyword search. Provide async DB init/connect (aiosqlite) via app lifespan, driven by the configurable database path in settings. Init must be idempotent.",
+      "phase": 1,
+      "dependencies": [],
+      "acceptance_criteria": [
+        "documents table has id, name, format, size_bytes, status, error_message, created_at, updated_at",
+        "chunks table has id, doc_id, chunk_index, text, tokens; jobs table has id, document_id, stage, chunks_processed, chunks_total, error_message, created_at, updated_at",
+        "FTS5 index over chunk text supports BM25 match queries; chunk deletes remove matching FTS5 rows",
+        "init is idempotent (safe to run twice) and runs on app startup via lifespan",
+        "database path is configurable via settings (default data/engine.db)",
+        "tests cover schema shape and idempotency against a temp DB"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T02",
+      "name": "Document repository",
+      "description": "Async CRUD repository over the documents table: create (status=pending), list newest-first, get by id, update status/error_message, delete.",
+      "phase": 1,
+      "dependencies": ["T01"],
+      "acceptance_criteria": [
+        "create returns a document with status=pending and UTC timestamps",
+        "list returns documents newest-first; get returns None for unknown id",
+        "update transitions status and refreshes updated_at; supports setting error_message",
+        "delete removes the row",
+        "unit tests against a temp/in-memory DB"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T03",
+      "name": "Chunk repository",
+      "description": "Async repository for chunks: insert batches of chunks together with their FTS5 rows, count and list chunks for a document, delete all chunks (and FTS5 rows) for a document atomically.",
+      "phase": 1,
+      "dependencies": ["T01"],
+      "acceptance_criteria": [
+        "batch insert persists chunk rows and FTS5 rows in one transaction",
+        "count_by_document, list_by_document, and delete_by_document behave correctly",
+        "delete_by_document removes both chunk rows and FTS5 entries",
+        "unit tests against a temp DB"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T04",
+      "name": "Job repository",
+      "description": "Async repository for ingestion jobs: create, get by id, update stage, chunk counters, and error_message.",
+      "phase": 1,
+      "dependencies": ["T01"],
+      "acceptance_criteria": [
+        "create returns a job with initial stage and zeroed counters",
+        "get returns None for unknown id",
+        "update stage/counters/error_message and refresh updated_at",
+        "unit tests against a temp DB"
+      ],
+      "priority": "high",
+      "effort": "S",
+      "status": "pending"
+    },
+    {
+      "id": "T05",
+      "name": "BM25 search repository",
+      "description": "Async FTS5 query wrapper: safe query construction (escaping), top-k retrieval ordered by BM25 rank, empty-result handling.",
+      "phase": 1,
+      "dependencies": ["T01"],
+      "acceptance_criteria": [
+        "search(text, k) returns chunk ids ordered by FTS5 bm25 rank",
+        "user-query punctuation/special characters cannot break or error the match query",
+        "no matches returns an empty list",
+        "unit tests against a temp DB with seeded chunks"
+      ],
+      "priority": "high",
+      "effort": "S",
+      "status": "pending"
+    },
+    {
+      "id": "T06",
+      "name": "Parser contract, registry, and Markdown parser",
+      "description": "Define the parsed-document model (plain text plus structural blocks: headings with levels, paragraphs) and a registry dispatching by file extension. Implement the Markdown parser first as the reference implementation.",
+      "phase": 2,
+      "dependencies": [],
+      "acceptance_criteria": [
+        "ParsedDocument exposes both full text and structured blocks (heading level + paragraph text) sufficient for structure-aware chunking",
+        "registry maps .md to the markdown parser; unknown extensions are rejected",
+        "markdown parser preserves ATX/setext headings as structure and strips markup from text",
+        "unit tests with .md fixtures"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T07",
+      "name": "HTML parser",
+      "description": "Extract headings (h1–h6) as structural blocks and paragraph text from HTML; strip scripts, styles, navigation, and tags; register .html/.htm.",
+      "phase": 2,
+      "dependencies": ["T06"],
+      "acceptance_criteria": [
+        "headings map to structural blocks with correct levels",
+        "script/style/nav content is excluded from extracted text",
+        "registry resolves .html and .htm",
+        "unit tests with .html fixtures"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T08",
+      "name": "docx parser",
+      "description": "Extract paragraphs and heading blocks from .docx (via paragraph styles/outline levels), preserving tables as readable text; register .docx.",
+      "phase": 2,
+      "dependencies": ["T06"],
+      "acceptance_criteria": [
+        "heading paragraphs (Heading 1–6 styles) become structural blocks",
+        "body paragraphs become text blocks in order; tables are flattened to readable text",
+        "registry resolves .docx",
+        "unit tests with generated .docx fixtures"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T09",
+      "name": "PDF parser",
+      "description": "Extract text from .pdf page by page, preserving paragraph structure as best the library allows; surface unreadable/corrupt PDFs as parse failures; register .pdf.",
+      "phase": 2,
+      "dependencies": ["T06"],
+      "acceptance_criteria": [
+        "text is extracted in page order and grouped into paragraphs",
+        "corrupt/unreadable PDFs raise a typed parse error that the job layer maps to status=failed with no retry",
+        "registry resolves .pdf",
+        "unit tests with generated PDF fixtures (simple + corrupt)"
+      ],
+      "priority": "high",
+      "effort": "L",
+      "status": "pending"
+    },
+    {
+      "id": "T10",
+      "name": "Structure-aware chunker",
+      "description": "Chunk parsed documents on structure (headings/paragraphs) first, then cap size: target ~500 tokens with ~50-token overlap; never split a sentence (last-resort split only for pathological unbroken blocks). Deterministic chunk ids from doc_id + index.",
+      "phase": 3,
+      "dependencies": ["T06"],
+      "acceptance_criteria": [
+        "chunks respect heading/paragraph boundaries rather than fixed-size cuts",
+        "target ~500 tokens per chunk with ~50-token overlap between adjacent chunks",
+        "no sentence is split unless the block is an unbroken multi-thousand-token run",
+        "chunk ids are deterministic: same doc_id + input produce identical ids",
+        "unit tests cover structure preservation, sentence integrity, overlap, and determinism"
+      ],
+      "priority": "high",
+      "effort": "L",
+      "status": "pending"
+    },
+    {
+      "id": "T11",
+      "name": "Pinecone client wrapper",
+      "description": "Thin wrapper over the pinecone SDK connecting to the pre-created index named by PINECONE_INDEX, providing the index handle used by the embedding, vector, and reranker services. Errors surface clearly when the index/key are missing.",
+      "phase": 4,
+      "dependencies": [],
+      "acceptance_criteria": [
+        "client connects using settings (PINECONE_INDEX, PINECONE_API_KEY) without hardcoding",
+        "missing index/key produces a clear, typed error message",
+        "no live API calls in tests — all Pinecone usage is mocked",
+        "unit tests using mocked SDK"
+      ],
+      "priority": "high",
+      "effort": "S",
+      "status": "pending"
+    },
+    {
+      "id": "T12",
+      "name": "Embedding service",
+      "description": "Wrap Pinecone inference /embed (llama-text-embed-v2, 1024-dim): batch inputs (≤32, sequential), input_type=passage for documents and query for questions, transient-error retries.",
+      "phase": 4,
+      "dependencies": ["T11"],
+      "acceptance_criteria": [
+        "embed(list[str], input_type) returns one 1024-dim vector per input",
+        "passage/query input_type is set correctly per caller",
+        "batches are ≤32 and processed sequentially; results preserve input order",
+        "transient errors are retried per retry policy",
+        "unit tests with mocked inference API"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T13",
+      "name": "Vector repository",
+      "description": "Async wrapper over Pinecone index operations: upsert vectors (batch ~100) carrying chunk id + doc_id metadata, query top-k with scores, delete all vectors for a document via the doc_id metadata filter.",
+      "phase": 4,
+      "dependencies": ["T11"],
+      "acceptance_criteria": [
+        "upsert writes vectors with ids equal to chunk ids and doc_id metadata",
+        "query(text_vector, k) returns matches with scores",
+        "delete_by_document(doc_id) removes all matching vectors via the metadata filter",
+        "unit tests with a mocked index"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T14",
+      "name": "Reranker service",
+      "description": "Wrap Pinecone hosted inference /rerank (bge-reranker-v2-m3): rerank a candidate list for a query, top_n output, rank_fields=[\"text\"], and truncate=END to avoid the model's NONE-truncation error on long chunks.",
+      "phase": 4,
+      "dependencies": ["T11"],
+      "acceptance_criteria": [
+        "rerank(query, docs, top_n=3) returns scored results (0–1) in rank order",
+        "truncate=END and rank_fields=[\"text\"] are always sent",
+        "unit tests with a mocked rerank API"
+      ],
+      "priority": "high",
+      "effort": "S",
+      "status": "pending"
+    },
+    {
+      "id": "T15",
+      "name": "Ingestion job worker and executor",
+      "description": "Thread-pool worker that executes a job through parse → chunk → embed → index, updating stage and chunk counters along the way. On completion marks the document indexed and job succeeded; parse failures fail fast with an error_message.",
+      "phase": 5,
+      "dependencies": ["T01", "T02", "T03", "T04", "T06", "T07", "T08", "T09", "T10", "T12", "T13"],
+      "acceptance_criteria": [
+        "runs jobs on a bounded in-process thread pool (no external queue)",
+        "executes the full pipeline and updates document status to indexed and job to succeeded",
+        "stage and chunks_processed/total progress are persisted as work proceeds",
+        "parse failure marks job failed with a clear error_message and no retry",
+        "transient embed/upsert failures trigger the retry policy before failing",
+        "integration-style tests with all hosted calls mocked"
+      ],
+      "priority": "high",
+      "effort": "L",
+      "status": "pending"
+    },
+    {
+      "id": "T16",
+      "name": "Retry with exponential backoff",
+      "description": "Shared retry helper for transient hosted-API errors (embed, upsert, rerank, chat): up to 3 attempts with exponential backoff (1s → 4s → 16s), then propagate the final error. Parse errors are never retried.",
+      "phase": 5,
+      "dependencies": ["T15"],
+      "acceptance_criteria": [
+        "transient errors are retried up to 3 times with the specified backoff",
+        "a call that fails transiently then succeeds returns the success (job completes)",
+        "an always-failing call surfaces the final error so the job/query fails with a clear message",
+        "parse errors are excluded from retry",
+        "unit tests with mocks that fail a configurable number of times"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T17",
+      "name": "Retrieval orchestrator (vector + BM25 + RRF + rerank)",
+      "description": "Orchestrate a query: embed the question (input_type=query) → Pinecone top-10 → FTS5 BM25 top-10 → RRF fusion (k=60) to top-20 → hosted rerank to top-3. Empty candidate set short-circuits before rerank/LLM.",
+      "phase": 6,
+      "dependencies": ["T05", "T12", "T13", "T14"],
+      "acceptance_criteria": [
+        "returns the top 3 reranked chunks with scores in rank order",
+        "RRF uses k=60 over the union of vector and BM25 candidates",
+        "empty retrieval returns an empty result without calling rerank",
+        "integration-style tests with mocked embed/query/rerank"
+      ],
+      "priority": "high",
+      "effort": "L",
+      "status": "pending"
+    },
+    {
+      "id": "T18",
+      "name": "DeepSeek chat client",
+      "description": "Wrap the OpenAI SDK for DeepSeek chat completions: base URL and model (deepseek-v4-flash) from settings, non-thinking mode, returns the answer text, and maps quota/network errors to typed exceptions.",
+      "phase": 7,
+      "dependencies": [],
+      "acceptance_criteria": [
+        "calls chat completions with the configured model and non-thinking mode",
+        "returns the assistant message text",
+        "quota/rate-limit and network errors raise typed exceptions",
+        "unit tests with a mocked OpenAI client"
+      ],
+      "priority": "high",
+      "effort": "S",
+      "status": "pending"
+    },
+    {
+      "id": "T19",
+      "name": "Answer orchestration and prompt",
+      "description": "Assemble the query answer: build the system prompt (answer from provided chunks only, no invented citations, say so when absent), feed the top-3 chunks + question to DeepSeek, and return the answer plus structured sources (chunk_id, doc_id, doc_name, excerpt, score). Empty retrieval returns the canned 'no sources' message without calling the LLM.",
+      "phase": 7,
+      "dependencies": ["T17", "T18"],
+      "acceptance_criteria": [
+        "prompt instructs grounded answering and no invented citations",
+        "response contains answer text and sources for the top-3 chunks",
+        "empty retrieval returns the canned no-sources message with empty sources and no LLM call",
+        "unit tests with mocked chat"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T20",
+      "name": "Document upload endpoint",
+      "description": "POST /documents: accept a multipart file (.pdf/.docx/.html/.md), validate extension and size, store the original at data/uploads/<doc_id><ext>, create document + job rows, enqueue the background job, respond 202 with document + job.",
+      "phase": 8,
+      "dependencies": ["T01", "T02", "T04", "T15", "T16"],
+      "acceptance_criteria": [
+        "202 returns the pending document and job per docs/endpoints.md",
+        "unsupported extension or empty file returns 400",
+        "file over the size limit (50 MB default, configurable) returns 413",
+        "original is saved to data/uploads/<doc_id><ext>",
+        "endpoint tests with uploads and job execution mocked"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T21",
+      "name": "Document list and detail endpoints",
+      "description": "GET /documents (list newest-first with status) and GET /documents/{id} (detail plus chunk_count and error_message).",
+      "phase": 8,
+      "dependencies": ["T02", "T03"],
+      "acceptance_criteria": [
+        "list returns all documents newest-first per the contract",
+        "detail returns chunk_count (0 when not indexed) and error_message on failure",
+        "detail returns 404 for unknown ids",
+        "endpoint tests"
+      ],
+      "priority": "high",
+      "effort": "S",
+      "status": "pending"
+    },
+    {
+      "id": "T22",
+      "name": "Document delete endpoint",
+      "description": "DELETE /documents/{id}: delete Pinecone vectors by doc_id metadata filter, then chunk + FTS5 + document rows in SQLite, then the stored original file. Returns 204; 404 for unknown ids.",
+      "phase": 8,
+      "dependencies": ["T02", "T03", "T13"],
+      "acceptance_criteria": [
+        "deletes vectors, SQLite rows (chunks + FTS5 + document), and the original file",
+        "returns 204 on success and 404 for unknown ids",
+        "endpoint tests with Pinecone delete mocked"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T23",
+      "name": "Document re-index endpoint",
+      "description": "POST /documents/{id}/reindex: clear old vectors via metadata filter, reset status to pending, enqueue a fresh job against the stored original (no re-upload), respond 202 with the new job.",
+      "phase": 8,
+      "dependencies": ["T02", "T03", "T13", "T15"],
+      "acceptance_criteria": [
+        "old vectors are cleared and status reset to pending",
+        "a fresh job runs the pipeline on the stored original; 202 returns the job",
+        "404 for unknown ids",
+        "endpoint tests with Pinecone + job execution mocked"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T24",
+      "name": "Job status endpoint",
+      "description": "GET /jobs/{id}: return stage, chunks_processed, chunks_total, error_message. 404 for unknown ids.",
+      "phase": 8,
+      "dependencies": ["T04"],
+      "acceptance_criteria": [
+        "returns the job payload per docs/endpoints.md",
+        "404 for unknown ids",
+        "endpoint tests"
+      ],
+      "priority": "high",
+      "effort": "S",
+      "status": "pending"
+    },
+    {
+      "id": "T25",
+      "name": "Query endpoint",
+      "description": "POST /queries: synchronous — embed question, retrieve, rerank, generate answer, return answer + sources. Empty retrieval returns the canned no-sources message; missing/empty question returns 400; hosted-service failure returns 503 with a retryable message.",
+      "phase": 8,
+      "dependencies": ["T17", "T19"],
+      "acceptance_criteria": [
+        "200 with answer + top-3 sources per docs/endpoints.md",
+        "no sources found returns the canned message with empty sources (no LLM call)",
+        "missing/empty question returns 400",
+        "hosted-service unavailability returns 503 with a retryable detail",
+        "endpoint tests with all hosted calls mocked"
+      ],
+      "priority": "high",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T26",
+      "name": "Hardening and error-semantics audit",
+      "description": "Audit the whole API against docs/endpoints.md: consistent {detail} error shape, correct 400/404/413/503 codes, configurable upload size limit, safe file handling, and quota errors surfaced as failed jobs with clear messages.",
+      "phase": 9,
+      "dependencies": ["T20", "T21", "T22", "T23", "T24", "T25"],
+      "acceptance_criteria": [
+        "every endpoint matches its documented status codes and response shapes",
+        "upload size limit is configurable via settings and enforced",
+        "quota-exceeded errors fail jobs with a clear message",
+        "no secrets/logs of keys anywhere in the codebase",
+        "full test suite passes"
+      ],
+      "priority": "medium",
+      "effort": "M",
+      "status": "pending"
+    },
+    {
+      "id": "T27",
+      "name": "Docs sync and final verification",
+      "description": "Reconcile docs with code: chunking numbers, top-k, retries, model name, error semantics. Update docs/rag-workflow.md, docs/endpoints.md, docs/architecture.md, README.md, and docs/risks-and-open-questions.md. Run the full verification gate.",
+      "phase": 9,
+      "dependencies": ["T26"],
+      "acceptance_criteria": [
+        "no stale TBDs or contradictions between docs and code",
+        "README reflects what the backend actually does",
+        "pytest passes with only mocked hosted calls; ruff check and format are clean",
+        "a manual local smoke run (real keys) confirms upload → job → query round trip"
+      ],
+      "priority": "medium",
+      "effort": "M",
+      "status": "pending"
+    }
+  ]
+}
