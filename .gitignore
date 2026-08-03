@@ -1,0 +1,9 @@
+.venv
+.env
+opencode.json
+__pycache__/
+*.pyc
+data/uploads/
+data/engine.db
+.pytest_cache/
+.ruff_cache/

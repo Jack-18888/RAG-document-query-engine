@@ -1,0 +1,7 @@
+fastapi==0.141.1
+uvicorn==0.52.1
+pydantic-settings==2.14.2
+openai==2.52.1
+pinecone==9.1.0
+aiosqlite==0.22.1
+python-multipart==0.0.32
