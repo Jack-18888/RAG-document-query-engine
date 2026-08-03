@@ -2,11 +2,13 @@
 
 ## Stack
 
-- **Python** (existing `.venv`), **FastAPI** served by **uvicorn**.
-- **DeepSeek API** (OpenAI-compatible, `api.deepseek.com`) for chat generation. API key via `.env`.
-- **Pinecone** (hosted, serverless, free tier) for vector storage plus hosted inference: `llama-text-embed-v2` embeddings (dim 1024, cosine) and `bge-reranker-v2-m3` reranking.
-- **SQLite + FTS5** for metadata and BM25 keyword search.
-- **pytest** with mocked hosted-API calls for testing (no live keys, no torch/sentence-transformers anywhere).
+- **Python 3.14** (existing `.venv`), **FastAPI** served by **uvicorn**.
+- **DeepSeek API** (OpenAI-compatible, `api.deepseek.com`) for chat generation, model `deepseek-v4-flash` (non-thinking mode — extractive RAG answers). API key via `.env`. Client: official `openai` SDK.
+- **Pinecone** (hosted, serverless, free tier) for vector storage plus hosted inference: `llama-text-embed-v2` embeddings (dim 1024, cosine) and `bge-reranker-v2-m3` reranking. Client: official `pinecone` SDK.
+- **SQLite + FTS5** for metadata and BM25 keyword search, accessed async via **aiosqlite**.
+- **Config**: `pydantic-settings` reads `.env` into a typed `Settings` (see `app/config.py`); loaded lazily via `get_settings()` dependency so tests never require `.env`.
+- **pytest + pytest-asyncio** with mocked hosted-API calls for testing (no live keys, no torch/sentence-transformers anywhere); `httpx` provides the `TestClient` transport.
+- **ruff 0.16.1** for lint + format (configured in `pyproject.toml`).
 - **Ingestion jobs** run in an in-process thread pool.
 
 ## Where it runs
@@ -19,7 +21,7 @@ Locally, single machine, launched with uvicorn from the `.venv`. Serves the REST
 - Vectors are upserted into a Pinecone index (one vector per chunk, id = chunk id); every vector carries `doc_id` (indexed metadata, for filter deletes). Chunk text and metadata stay in SQLite.
 - Uploaded originals are stored on disk under `data/uploads/` (gitignored).
 - No local model files of any kind: embeddings and reranking come from Pinecone inference; chat from DeepSeek.
-- Pinecone index: serverless, AWS `us-east-1` (free-tier region), dimension 1024, metric cosine.
+- Pinecone index: serverless, AWS `us-east-1` (free-tier region), dimension 1024, metric cosine, **pre-created by the user**; index name comes from the `PINECONE_INDEX` env var (see [docs/risks-and-open-questions.md](docs/risks-and-open-questions.md)).
 
 ## Code layout
 

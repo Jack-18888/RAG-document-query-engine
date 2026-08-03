@@ -8,11 +8,11 @@ Backend for a self-hosted RAG document query engine: ingest PDF/docx/HTML/Markdo
 
 ## Setup & commands
 
-- Install: `pip install -r requirements.txt` into the existing `.venv` (requirements file TBD until the stack is scaffolded).
-- Config: copy `.env.example` to `.env` and fill in `PINECONE_API_KEY` and `DEEPSEEK_API_KEY` (`.env` is never committed or read by agents — see `opencode.json`).
-- Run/dev: `uvicorn <app> --reload` from the `.venv` (exact module TBD until scaffolded).
+- Install: `pip install -r requirements.txt` into the existing `.venv`.
+- Config: copy `.env.example` to `.env` and fill in `PINECONE_API_KEY`, `PINECONE_INDEX`, and `DEEPSEEK_API_KEY` (`.env` is never committed or read by agents — see `opencode.json`).
+- Run/dev: `uvicorn app.main:app --reload` from the `.venv`.
 - Test: `pytest` — the full suite must pass with no live API keys (LLM/embedding calls are mocked).
-- Lint/format: TBD until the stack is scaffolded (likely ruff).
+- Lint/format: `ruff check .` and `ruff format --check .` (ruff 0.16.1, pinned in `requirements.txt`).
 
 ## Code style & conventions
 
