@@ -15,7 +15,7 @@
 ## Open questions
 
 - **httpx vs httpx2:** starlette 1.3.1's `TestClient` emits a deprecation warning advising `httpx2`; tests pass on httpx 0.28.1 today. Revisit when upstream drops httpx support.
-- **Scaffolded layout:** `app/` packages (`api`, `parsers`, `chunking`, `embeddings`, `retrieval`, `generation`, `storage`, `jobs`) and `tests/{unit,integration}` exist as empty packages; next step is the storage/schema layer.
+- **Storage layer (T01):** resolved — SQLite schema (documents/chunks/jobs + FTS5 external-content index) is defined in `db_init.sql` and applied idempotently via `app/storage/db.py` on app startup; the chunks table uses its implicit rowid to back the FTS5 index (no redundant integer PK column).
 
 ## Known risks / dependencies
 
