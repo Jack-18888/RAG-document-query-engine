@@ -17,7 +17,7 @@ Locally, single machine, launched with uvicorn from the `.venv`. Serves the REST
 
 ## Data
 
-- One SQLite database file at `data/engine.db` containing: documents table (metadata + ingestion status), chunks table (text + document refs), FTS5 index for keyword search, and ingestion job records with progress.
+- One SQLite database file at `data/engine.db` containing: documents table (metadata + ingestion status), chunks table (text + document refs), FTS5 index for keyword search, and ingestion job records with progress. The schema lives in `data/db_init.sql` (single source of truth) and is applied idempotently by `app/storage/db.py` on app startup (lifespan); the database path is configurable via settings.
 - Vectors are upserted into a Pinecone index (one vector per chunk, id = chunk id); every vector carries `doc_id` (indexed metadata, for filter deletes). Chunk text and metadata stay in SQLite.
 - Uploaded originals are stored on disk under `data/uploads/` (gitignored).
 - No local model files of any kind: embeddings and reranking come from Pinecone inference; chat from DeepSeek.
