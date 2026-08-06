@@ -10,7 +10,7 @@
 - **Config**: `pydantic-settings` reads `.env` into a typed `Settings` (see `app/config.py`); loaded lazily via `get_settings()` dependency so tests never require `.env`.
 - **pytest + pytest-asyncio** with mocked hosted-API calls for testing (no live keys, no torch/sentence-transformers anywhere); `httpx` provides the `TestClient` transport.
 - **ruff 0.16.1** for lint + format (configured in `pyproject.toml`).
-- **Ingestion jobs** run in an in-process thread pool.
+- **Ingestion jobs** run in an in-process thread pool (`app/jobs/worker.py`); each job runs its own event loop via `asyncio.run` and reuses the shared SQLite connection. Concurrency bounded by `job_max_workers` (default 2, configurable via settings).
 
 ## Where it runs
 

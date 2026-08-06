@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     upload_dir: str = "data/uploads"
     database_path: str = "data/engine.db"
 
+    job_max_workers: int = 2
+    max_upload_size_mb: int = 50
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
