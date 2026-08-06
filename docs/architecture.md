@@ -6,6 +6,7 @@
 - **DeepSeek API** (OpenAI-compatible, `api.deepseek.com`) for chat generation, model `deepseek-v4-flash` (non-thinking mode — extractive RAG answers). API key via `.env`. Client: official `openai` SDK.
 - **Pinecone** (hosted, serverless, free tier) for vector storage plus hosted inference: `llama-text-embed-v2` embeddings (dim 1024, cosine) and `bge-reranker-v2-m3` reranking. Client: official `pinecone` SDK.
 - **SQLite + FTS5** for metadata and BM25 keyword search, accessed async via **aiosqlite**.
+- **Parsing libraries:** `mistune` for Markdown (AST-based, structure-aware), `python-docx` for `.docx`, `pypdf` for `.pdf`; HTML parsed with the stdlib `html.parser`.
 - **Config**: `pydantic-settings` reads `.env` into a typed `Settings` (see `app/config.py`); loaded lazily via `get_settings()` dependency so tests never require `.env`.
 - **pytest + pytest-asyncio** with mocked hosted-API calls for testing (no live keys, no torch/sentence-transformers anywhere); `httpx` provides the `TestClient` transport.
 - **ruff 0.16.1** for lint + format (configured in `pyproject.toml`).
@@ -25,7 +26,7 @@ Locally, single machine, launched with uvicorn from the `.venv`. Serves the REST
 
 ## Code layout
 
-Layer-based, one top-level package per concern under `app/`: `api/` (routers + schemas), `parsers/` (one module per format), `chunking/`, `embeddings/`, `retrieval/` (vector, bm25, fusion, reranker), `generation/`, `storage/` (db + repositories), `jobs/` (ingestion worker). Tests mirror the layout under `tests/unit/` and `tests/integration/`.
+Layer-based, one top-level package per concern under `app/`: `api/` (routers + schemas), `parsers/` (one module per format, a registry dispatching by extension, plus a shared `ParsedDocument` model of text + structural blocks), `chunking/`, `embeddings/`, `retrieval/` (vector, bm25, fusion, reranker), `generation/`, `storage/` (db + repositories), `jobs/` (ingestion worker). Tests mirror the layout under `tests/unit/` and `tests/integration/`.
 
 ## Integrations
 
