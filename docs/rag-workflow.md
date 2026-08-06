@@ -29,7 +29,7 @@ job worker (thread pool):
 
 ### Retry & failure semantics
 
-- **Transient errors** (embedding/rerank API errors, DeepSeek errors, network, Pinecone rate limits): retry up to 3 attempts with exponential backoff (e.g., 1s → 4s → 16s), then mark job `failed` with `error_message`.
+- **Transient errors** (embedding/rerank API errors, DeepSeek errors, network, Pinecone rate limits): retried via the shared `retry_async` helper — max 3 total attempts with exponential backoff between attempts (1s, then 4s), then the final error propagates (job `failed` with `error_message`, or 503 for queries).
 - **Parse errors** (unreadable/corrupt file, unsupported format): fail fast — no retries; `error_message` explains the reason; original file is kept so the user can inspect/re-upload.
 - **Partial index** is not tolerated by default: if embedding or indexing fails for part of the chunks, the whole job retries; only after retries are exhausted does the job fail (stale vectors for that doc, if any were written, are cleaned up on re-ingest via metadata filter delete).
 
