@@ -28,6 +28,12 @@ def _executor(request: Request) -> JobExecutor:
     return request.app.state.job_executor
 
 
+def _stored_path(doc_id: str, filename: str) -> Path:
+    settings = get_settings()
+    ext = Path(filename).suffix.lower()
+    return Path(settings.upload_dir) / f"{doc_id}{ext}"
+
+
 async def _stream_to_temp(file: UploadFile) -> tuple[Path, int]:
     settings = get_settings()
     upload_dir = Path(settings.upload_dir)
@@ -103,7 +109,6 @@ async def delete_document(doc_id: str) -> None:
     if document is None:
         raise HTTPException(status_code=404, detail="document not found")
 
-    settings = get_settings()
     from app.embeddings.pinecone_client import get_pinecone_client
     from app.retrieval.vector_repo import VectorRepository
 
@@ -118,8 +123,7 @@ async def delete_document(doc_id: str) -> None:
     await chunk_repo.delete_by_document(doc_id)
     await document_repo.delete(doc_id)
 
-    ext = Path(document["name"]).suffix
-    stored = Path(settings.upload_dir) / f"{doc_id}{ext}"
+    stored = _stored_path(doc_id, document["name"])
     stored.unlink(missing_ok=True)
 
 
@@ -148,9 +152,7 @@ async def reindex_document(
     await document_repo.update(doc_id, status="pending", error_message=None)
     job = await job_repo.create(document_id=doc_id)
 
-    settings = get_settings()
-    ext = Path(document["name"]).suffix
-    stored = Path(settings.upload_dir) / f"{doc_id}{ext}"
+    stored = _stored_path(doc_id, document["name"])
     if not stored.exists():
         raise HTTPException(status_code=404, detail="stored original file not found")
     executor.enqueue(job["id"], stored)

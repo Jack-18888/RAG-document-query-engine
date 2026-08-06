@@ -156,6 +156,23 @@ async def test_embed_failure_fails_job(conn, tmp_path, fake_client, monkeypatch)
     assert fetched_job["stage"] == "failed"
 
 
+async def test_upsert_failure_leaves_no_local_chunks(conn, tmp_path, fake_client, monkeypatch):
+    from app.storage import chunk_repo
+
+    doc, job, path = await _enqueue_md(tmp_path, conn)
+
+    async def boom(self, *args, **kwargs):
+        raise RuntimeError("vector upsert down")
+
+    monkeypatch.setattr("app.retrieval.vector_repo.VectorRepository.upsert", boom)
+
+    await ingest_job(job["id"], path)
+
+    fetched_doc = await document_repo.get(doc["id"])
+    assert fetched_doc["status"] == "failed"
+    assert await chunk_repo.count_by_document(doc["id"]) == 0
+
+
 async def test_unknown_job_is_noop(conn, tmp_path, fake_client):
     await ingest_job("job_nonexistent", tmp_path / "x.md")
     assert True

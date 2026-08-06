@@ -40,8 +40,8 @@ async def ingest_job(job_id: str, document_path: Path) -> None:
             input_type=INPUT_TYPE_PASSAGE,
         )
         await job_repo.update(job_id, stage="indexing", chunks_processed=len(chunks))
-        await chunk_repo.insert_many(chunks)
         await vector_repo.upsert([chunk.id for chunk in chunks], vectors, doc_id)
+        await chunk_repo.insert_many(chunks)
     except Exception as exc:
         await _fail(job_id, doc_id, str(exc))
         return

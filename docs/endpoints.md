@@ -4,23 +4,25 @@ Reference contract for the REST API. All routes are served at the root; errors u
 
 ## Conventions
 
-- IDs: UUID strings (`doc_<uuid>`, `job_<uuid>`); chunk ids are deterministic `chunk_<doc_id>_<index>`.
+- IDs: `doc_<12-hex>` and `job_<12-hex>` (truncated UUID hex); chunk ids are deterministic `chunk_<doc_id>_<index>`.
 - Timestamps: ISO-8601 UTC strings.
 - Documents have a user-facing `status`; jobs carry stage-level progress.
-- Upload size limit: 50 MB per file (configurable).
+- Upload size limit: 50 MB per file (configurable via settings).
 
-## Enums
+## Status / stage values
 
-| Name | Values |
+`status` and `stage` are plain string fields (not typed enums):
+
+| Field | Values |
 |---|---|
-| `DocumentStatus` | `pending` · `indexed` · `failed` |
-| `JobStage` | `parsing` · `chunking` · `embedding` · `indexing` · `succeeded` · `failed` |
+| `document.status` | `pending` · `indexed` · `failed` |
+| `job.stage` | `parsing` · `chunking` · `embedding` · `indexing` · `succeeded` · `failed` |
 
 ## Endpoints
 
 ### `POST /documents` — upload a document
 
-Multipart form, field `file` (allowed: `.pdf`, `.docx`, `.html`, `.md`).
+Multipart form, field `file` (allowed: `.pdf`, `.docx`, `.html`, `.htm`, `.md`).
 
 - **202** — accepted. Ingestion runs in the background thread pool; the document is immediately visible with `status=pending`.
 
@@ -71,13 +73,15 @@ Deletes Pinecone vectors via metadata filter (`doc_id == <id>`), then SQLite row
 
 - **204** — deleted.
 - **404** — unknown id.
+- **503** — vector service unavailable (delete did not proceed).
 
 ### `POST /documents/{id}/reindex` — re-index a document
 
 Runs the pipeline again on the stored original (no re-upload). Old vectors are cleared first via metadata filter.
 
 - **202** — `{ "job": { ... } }` with a fresh job.
-- **404** — unknown id.
+- **404** — unknown id, or the stored original file is missing.
+- **503** — vector service unavailable.
 
 ### `GET /jobs/{id}` — job status
 
@@ -94,7 +98,7 @@ Body: `{ "question": "<string>" }`. Synchronous — blocks until the answer is g
 {
   "answer": "The retention policy requires invoices to be kept for 7 years.",
   "sources": [
-    { "chunk_id": "chunk_1", "doc_id": "doc_a1b2c3", "doc_name": "report.pdf", "excerpt": "Invoices must be retained for a period of 7 years...", "score": 0.89 }
+    { "chunk_id": "chunk_doc_a1b2c3_0", "doc_id": "doc_a1b2c3", "doc_name": "report.pdf", "excerpt": "Invoices must be retained for a period of 7 years...", "score": 0.89 }
   ]
 }
 ```

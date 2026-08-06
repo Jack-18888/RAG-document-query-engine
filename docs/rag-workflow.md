@@ -13,25 +13,25 @@ Reference for how the engine actually processes documents and queries — the pi
 
 ```
 upload (POST /documents)
-  → create document row (status=pending) + job row (status=pending)
+  → create document row (status=pending) + job row (stage=parsing)
   → save original to data/uploads/
   → enqueue job → respond 202 with job id (document visible with status=pending)
 job worker (thread pool):
-  → status=parsing    parse by extension (see parsers/)
+  → stage=parsing    parse by extension (see parsers/)
         parse failure → status=failed (fail fast, no retry)
-  → status=chunking   structure-aware chunking (see chunking rules)
-  → status=embedding  embed chunks via Pinecone inference, `input_type=passage`, batch size ~32 (model limit 96), sequential batches
-  → status=indexing   upsert vectors into Pinecone (batch ~100), insert chunk rows + FTS5 rows in SQLite, mark doc status=indexed, job status=succeeded
+  → stage=chunking   structure-aware chunking (see chunking rules)
+  → stage=embedding  embed chunks via Pinecone inference, `input_type=passage`, batch size ~32 (model limit 96), sequential batches
+  → stage=indexing   upsert vectors into Pinecone (batch ~100), then insert chunk rows + FTS5 rows in SQLite, mark doc status=indexed, job stage=succeeded
 ```
 
-- Document + job both expose `status`; document status is the user-facing view (`pending` / `indexed` / `failed`), job holds progress detail (`stage`, `error_message`).
+- Document exposes `status` (user-facing: `pending` / `indexed` / `failed`); job holds progress detail (`stage`: `parsing` / `chunking` / `embedding` / `indexing` / `succeeded` / `failed`, plus `chunks_processed` / `chunks_total` and `error_message`).
 - Progress: jobs report the stage and count of chunks processed; percentages are derived client-side where needed.
 
 ### Retry & failure semantics
 
-- **Transient errors** (embedding/rerank API errors, DeepSeek errors, network, Pinecone rate limits): retried via the shared `retry_async` helper — max 3 total attempts with exponential backoff between attempts (1s, then 4s), then the final error propagates (job `failed` with `error_message`, or 503 for queries).
+- **Transient errors** (embedding/rerank API errors, DeepSeek errors, network, Pinecone rate limits): retried via the shared `retry_async` helper — max 3 total attempts with exponential backoff between attempts (1s, then 4s), then the final error propagates (job `failed` with `error_message`, or 503 for queries). Retries are per API call; there is no whole-job re-run.
 - **Parse errors** (unreadable/corrupt file, unsupported format): fail fast — no retries; `error_message` explains the reason; original file is kept so the user can inspect/re-upload.
-- **Partial index** is not tolerated by default: if embedding or indexing fails for part of the chunks, the whole job retries; only after retries are exhausted does the job fail (stale vectors for that doc, if any were written, are cleaned up on re-ingest via metadata filter delete).
+- **Partial index** is not tolerated: the worker upserts vectors to Pinecone *before* writing chunk rows to SQLite, so a failed indexing step leaves no local chunks for the document (the document is marked `failed`). If some vectors were written before the failure, re-ingesting the document cleans them up via metadata-filter delete.
 
 ## 2. Chunking rules
 
@@ -39,7 +39,7 @@ job worker (thread pool):
 - Target: ~500 tokens per chunk with ~50 tokens overlap (sentence-level overlap where possible).
 - **Token estimate:** `len(text.split())` (word count) — no local tokenizer; used for both the size cap and the overlap budget, and stored in `chunks.tokens`.
 - **Headings:** a chunk's active heading path (e.g. `Grand | Sub A`) is prepended to the chunk text; a new heading flushes the current chunk and starts fresh (no overlap carried across a heading boundary).
-- **Never cut a sentence in two** — if a chunk reaches the limit mid-sentence, the sentence is kept whole and the chunk may exceed the limit. Only split mid-sentence as a last resort for pathological input (e.g., an unbroken multi-thousand-token block), and note that in code comments only if needed.
+- **Never cut a sentence in two** — if a chunk reaches the limit mid-sentence, the sentence is kept whole and the chunk may exceed the limit. An unbroken multi-thousand-token block becomes a single oversized chunk (no mid-sentence split).
 - Overlap is applied between adjacent chunks so sentence context isn't lost at boundaries.
 - Deterministic: same input → same chunks (stable ids derived from doc_id + chunk index: `chunk_<doc_id>_<index>`).
 
@@ -53,7 +53,7 @@ POST /queries
   → fusion:               Reciprocal Rank Fusion (RRF, k=60) over the union; take top 20
   → rerank:               hosted bge-reranker-v2-m3 over the fused top 20 (top_n=3, rank_fields=["text"], truncate=END)
   → keep top 3            chunks as context
-  → chat completion       DeepSeek (deepseek-chat, OpenAI-compatible), system prompt + the 3 chunks + question
+  → chat completion       DeepSeek (`deepseek-v4-flash`, non-thinking, OpenAI-compatible), system prompt + the 3 chunks + question
   → respond               answer text + structured source list
 ```
 
@@ -94,7 +94,7 @@ POST /queries
 - **Retry transient, fail parse:** API/network errors are recoverable and common; a corrupt file will never become readable by retrying.
 - **RRF over weighted scores:** no cross-system score calibration, robust, well-understood.
 - **Hosted bge-reranker-v2-m3 over a local model:** one platform for vectors + inference (single API key, no torch/sentence-transformers install), and better cross-encoder quality than a tiny local model; the trade-off is per-call inference cost against the free-tier monthly rerank-unit cap.
-- **DeepSeek for chat:** cheap, OpenAI-compatible API (`deepseek-chat`), plenty of quality for grounded Q&A from 3 chunks.
+- **DeepSeek for chat:** cheap, OpenAI-compatible API (`deepseek-v4-flash`), plenty of quality for grounded Q&A from 3 chunks.
 - **Pinecone inference for embeddings (`llama-text-embed-v2`, 1024-dim):** removes OpenAI embeddings from the stack; dimension 1024 balances free-tier storage against quality (the model supports 384–2048).
 - **Metadata filter delete over id-tracking/namespaces:** single-call cleanup, no extra bookkeeping, single namespace keeps queries simple.
 - **Structured sources over inline markers:** avoids relying on the LLM to emit citation tokens (which is flaky); frontend owns rendering.
