@@ -52,6 +52,20 @@ async def list_by_document(doc_id: str) -> list[Chunk]:
     return [_row_to_chunk(row) for row in rows]
 
 
+async def get_by_ids(chunk_ids: list[str]) -> list[Chunk]:
+    if not chunk_ids:
+        return []
+    conn = db.get_connection()
+    placeholders = ",".join("?" for _ in chunk_ids)
+    async with conn.execute(
+        f"SELECT id, doc_id, chunk_index, text, tokens FROM chunks WHERE id IN ({placeholders})",
+        chunk_ids,
+    ) as cursor:
+        rows = await cursor.fetchall()
+    by_id = {row["id"]: _row_to_chunk(row) for row in rows}
+    return [by_id[cid] for cid in chunk_ids if cid in by_id]
+
+
 async def delete_by_document(doc_id: str) -> None:
     conn = db.get_connection()
     await conn.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
