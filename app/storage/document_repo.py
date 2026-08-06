@@ -57,7 +57,7 @@ async def list_all() -> list[dict[str, Any]]:
     conn = db.get_connection()
     async with conn.execute(
         "SELECT id, name, format, size_bytes, status, error_message, created_at, updated_at "
-        "FROM documents ORDER BY created_at DESC"
+        "FROM documents ORDER BY created_at DESC, rowid DESC"
     ) as cursor:
         rows = await cursor.fetchall()
     return [_row_to_dict(row) for row in rows]

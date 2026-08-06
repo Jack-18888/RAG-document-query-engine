@@ -341,7 +341,7 @@
       ],
       "priority": "high",
       "effort": "M",
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "T21",
@@ -357,7 +357,7 @@
       ],
       "priority": "high",
       "effort": "S",
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "T22",
@@ -372,7 +372,7 @@
       ],
       "priority": "high",
       "effort": "M",
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "T23",
@@ -403,7 +403,7 @@
       ],
       "priority": "high",
       "effort": "S",
-      "status": "pending"
+      "status": "done"
     },
     {
       "id": "T25",
