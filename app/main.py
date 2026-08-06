@@ -8,9 +8,13 @@ from app.storage import db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await db.open_database()     # startup: init schema + open connection, set _connection
-    yield                        # <-- server serves requests here
-    await db.close_database()    # shutdown: close connection, set _connection = None
+    await db.open_database()  # startup: init schema + open connection, set _connection
+    try:
+        yield
+    except Exception as error:
+        raise error
+    finally:  # <-- server serves requests here
+        await db.close_database()  # shutdown: close connection, set _connection = None
 
 
 def create_app() -> FastAPI:
