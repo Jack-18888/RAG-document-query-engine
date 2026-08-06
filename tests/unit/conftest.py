@@ -33,6 +33,26 @@ def fake_pinecone(monkeypatch):
     return client
 
 
+class _FakeExecutor:
+    def __init__(self):
+        self.enqueued = []
+
+    def enqueue(self, job_id, path):
+        self.enqueued.append((job_id, path))
+
+    def shutdown(self):
+        pass
+
+
+@pytest.fixture
+def fake_executor(client):
+    executor = _FakeExecutor()
+    from app.api import documents as documents_api
+
+    client.app.dependency_overrides[documents_api._executor] = lambda: executor
+    return executor
+
+
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     db_path = tmp_path / "data" / "engine.db"

@@ -4,7 +4,7 @@ Reference contract for the REST API. All routes are served at the root; errors u
 
 ## Conventions
 
-- IDs: UUID strings (`doc_<uuid>`, `job_<uuid>`, `chunk_<uuid>`).
+- IDs: UUID strings (`doc_<uuid>`, `job_<uuid>`); chunk ids are deterministic `chunk_<doc_id>_<index>`.
 - Timestamps: ISO-8601 UTC strings.
 - Documents have a user-facing `status`; jobs carry stage-level progress.
 - Upload size limit: 50 MB per file (configurable).

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import tempfile
 from pathlib import Path
 from typing import Annotated
 
@@ -21,8 +23,6 @@ from app.storage import chunk_repo, document_repo, job_repo
 
 router = APIRouter(tags=["documents"])
 
-MAX_UPLOAD_SIZE_MB = 50
-
 
 def _executor(request: Request) -> JobExecutor:
     return request.app.state.job_executor
@@ -32,8 +32,6 @@ async def _stream_to_temp(file: UploadFile) -> tuple[Path, int]:
     settings = get_settings()
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
-    import os
-    import tempfile
 
     fd, temp_name = tempfile.mkstemp(dir=upload_dir, prefix=".upload-", suffix=".tmp")
     os.close(fd)
@@ -109,8 +107,14 @@ async def delete_document(doc_id: str) -> None:
     from app.embeddings.pinecone_client import get_pinecone_client
     from app.retrieval.vector_repo import VectorRepository
 
-    vector_repo = VectorRepository(get_pinecone_client())
-    await vector_repo.delete_by_document(doc_id)
+    try:
+        vector_repo = VectorRepository(get_pinecone_client())
+        await vector_repo.delete_by_document(doc_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"vector service unavailable: {exc}",
+        ) from exc
     await chunk_repo.delete_by_document(doc_id)
     await document_repo.delete(doc_id)
 
@@ -131,8 +135,14 @@ async def reindex_document(
     from app.embeddings.pinecone_client import get_pinecone_client
     from app.retrieval.vector_repo import VectorRepository
 
-    vector_repo = VectorRepository(get_pinecone_client())
-    await vector_repo.delete_by_document(doc_id)
+    try:
+        vector_repo = VectorRepository(get_pinecone_client())
+        await vector_repo.delete_by_document(doc_id)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"vector service unavailable: {exc}",
+        ) from exc
     await chunk_repo.delete_by_document(doc_id)
 
     await document_repo.update(doc_id, status="pending", error_message=None)
