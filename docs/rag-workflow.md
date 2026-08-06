@@ -37,9 +37,11 @@ job worker (thread pool):
 
 - Structure-aware, not fixed-size: split on document structure first (headings in markdown/HTML, paragraphs in PDF/docx), then cap size.
 - Target: ~500 tokens per chunk with ~50 tokens overlap (sentence-level overlap where possible).
+- **Token estimate:** `len(text.split())` (word count) — no local tokenizer; used for both the size cap and the overlap budget, and stored in `chunks.tokens`.
+- **Headings:** a chunk's active heading path (e.g. `Grand | Sub A`) is prepended to the chunk text; a new heading flushes the current chunk and starts fresh (no overlap carried across a heading boundary).
 - **Never cut a sentence in two** — if a chunk reaches the limit mid-sentence, the sentence is kept whole and the chunk may exceed the limit. Only split mid-sentence as a last resort for pathological input (e.g., an unbroken multi-thousand-token block), and note that in code comments only if needed.
 - Overlap is applied between adjacent chunks so sentence context isn't lost at boundaries.
-- Deterministic: same input → same chunks (stable ids derived from doc_id + chunk index).
+- Deterministic: same input → same chunks (stable ids derived from doc_id + chunk index: `chunk_<doc_id>_<index>`).
 
 ## 3. Query workflow
 
