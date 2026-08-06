@@ -1,4 +1,4 @@
-from app.parsers import markdown_parser  # noqa: F401
+from app.parsers import html_parser, markdown_parser  # noqa: F401
 from app.parsers.base import (
     Heading,
     Paragraph,
