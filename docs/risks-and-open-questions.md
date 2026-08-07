@@ -22,6 +22,7 @@
 - **Retry semantics (T16):** the shared `retry_async` helper does max 3 total attempts with exponential backoff between attempts (1s, then 4s) for transient hosted-API errors; parse errors are never retried.
 - **Partial-index guarantee (T15/T27):** the ingestion worker upserts vectors to Pinecone *before* writing SQLite chunk rows, so a failed index leaves no local chunks; a whole-job re-run is not implemented — retries are per API call only. Re-ingest cleans up any stray vectors via metadata-filter delete.
 - **Non-thinking mode (T18):** DeepSeek calls send `extra_body={"thinking": {"type": "disabled"}}` so `deepseek-v4-flash` answers extractively without reasoning tokens.
+- **Per-loop Pinecone client (bugfix):** `AsyncPinecone` is tied to the event loop that created it. A shared, lru-cached client first created inside an ingestion job's `asyncio.run` loop was then reused from the FastAPI main loop after that job loop closed, raising `RuntimeError: Event loop is closed` on delete/query/reindex (503). `PineconeClient` now caches one `AsyncPinecone` + index handle per running event loop and closes handles whose loop has closed; ingestion jobs and request handlers no longer share a loop-bound client.
 
 ## Known risks / dependencies
 

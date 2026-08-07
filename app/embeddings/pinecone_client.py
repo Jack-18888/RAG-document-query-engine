@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from functools import lru_cache
 
 from pinecone import AsyncPinecone
@@ -12,26 +13,41 @@ class PineconeClientError(Exception):
 
 
 class PineconeClient:
+    """AsyncPinecone is bound to the event loop that creates it; reusing it
+    from another loop (e.g. an ingestion job's asyncio.run loop) after that
+    loop closes raises "Event loop is closed". Cache one client + index per
+    running loop and drop handles whose loop is closed."""
+
     def __init__(self, api_key: str, index_name: str) -> None:
         self._api_key = api_key
         self._index_name = index_name
-        self._client: AsyncPinecone | None = None
-        self._index: object | None = None
+        self._clients: dict[asyncio.AbstractEventLoop, AsyncPinecone] = {}
+        self._indexes: dict[asyncio.AbstractEventLoop, object] = {}
+
+    def _loop(self) -> asyncio.AbstractEventLoop:
+        return asyncio.get_running_loop()
 
     async def index(self) -> object:
-        if self._index is not None:
-            return self._index
+        loop = self._loop()
+        index = self._indexes.get(loop)
+        if index is not None:
+            return index
         client = await self._connect()
-        self._index = await client.index(name=self._index_name)
-        return self._index
+        self._indexes[loop] = await client.index(name=self._index_name)
+        return self._indexes[loop]
 
     async def inference(self) -> object:
         client = await self._connect()
         return client.inference
 
     async def _connect(self) -> AsyncPinecone:
-        if self._client is not None:
-            return self._client
+        loop = self._loop()
+        client = self._clients.get(loop)
+        if client is not None:
+            return client
+        for dead in [key for key in self._clients if key.is_closed()]:
+            await self._close_handle(self._clients.pop(dead))
+            self._indexes.pop(dead, None)
         if not self._api_key:
             raise PineconeClientError(
                 "PINECONE_API_KEY is not configured; add it to .env to use Pinecone"
@@ -40,14 +56,22 @@ class PineconeClient:
             raise PineconeClientError(
                 "PINECONE_INDEX is not configured; add it to .env to use Pinecone"
             )
-        self._client = AsyncPinecone(api_key=self._api_key)
-        return self._client
+        client = AsyncPinecone(api_key=self._api_key)
+        self._clients[loop] = client
+        return client
 
     async def close(self) -> None:
-        if self._client is not None:
-            await self._client.close()
-            self._client = None
-            self._index = None
+        for client in list(self._clients.values()):
+            await self._close_handle(client)
+        self._clients.clear()
+        self._indexes.clear()
+
+    @staticmethod
+    async def _close_handle(client: AsyncPinecone) -> None:
+        try:
+            await client.close()
+        except Exception:
+            pass
 
 
 @lru_cache

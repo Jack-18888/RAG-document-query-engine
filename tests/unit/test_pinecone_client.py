@@ -1,3 +1,6 @@
+import asyncio
+import threading
+
 import pytest
 
 from app.embeddings.pinecone_client import PineconeClient, PineconeClientError, get_pinecone_client
@@ -18,12 +21,13 @@ class _FakeAsyncPinecone:
 
 @pytest.fixture
 def fake_client_class(monkeypatch):
-    tracker = {"count": 0, "last": None}
+    tracker = {"count": 0, "last": None, "instances": []}
 
     def make_client(**kwargs):
         tracker["count"] += 1
         instance = _FakeAsyncPinecone(**kwargs)
         tracker["last"] = instance
+        tracker["instances"].append(instance)
         return instance
 
     monkeypatch.setattr("app.embeddings.pinecone_client.AsyncPinecone", make_client)
@@ -101,3 +105,52 @@ async def test_get_pinecone_client_uses_settings(monkeypatch):
     assert client._api_key == "key-from-settings"
     assert client._index_name == "index-from-settings"
     get_pinecone_client.cache_clear()
+
+
+def _index_in_own_loop(client: PineconeClient) -> None:
+    asyncio.run(client.index())
+
+
+async def test_index_recreated_per_event_loop(fake_client_class):
+    client = PineconeClient(api_key="secret", index_name="my-index")
+    await client.index()
+    assert fake_client_class["count"] == 1
+
+    thread = threading.Thread(target=_index_in_own_loop, args=(client,))
+    thread.start()
+    thread.join()
+
+    assert fake_client_class["count"] == 2
+    assert fake_client_class["last"].closed is False
+
+    await client.index()
+    assert fake_client_class["count"] == 2
+
+
+async def test_dead_loop_client_closed_when_reconnecting(fake_client_class):
+    client = PineconeClient(api_key="secret", index_name="my-index")
+
+    thread = threading.Thread(target=_index_in_own_loop, args=(client,))
+    thread.start()
+    thread.join()
+
+    dead = fake_client_class["instances"][0]
+    assert dead.closed is False
+
+    await client.index()
+
+    assert dead.closed is True
+    assert fake_client_class["count"] == 2
+
+
+async def test_close_closes_handles_across_loops(fake_client_class):
+    client = PineconeClient(api_key="secret", index_name="my-index")
+    await client.index()
+
+    thread = threading.Thread(target=_index_in_own_loop, args=(client,))
+    thread.start()
+    thread.join()
+
+    await client.close()
+
+    assert all(instance.closed for instance in fake_client_class["instances"])
