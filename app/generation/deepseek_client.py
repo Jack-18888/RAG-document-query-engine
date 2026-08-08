@@ -1,3 +1,5 @@
+"""DeepSeek chat completion client with retry and error mapping."""
+
 from __future__ import annotations
 
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI
@@ -20,6 +22,7 @@ class ChatConnectionError(ChatError):
 
 
 def is_chat_transient(exc: Exception) -> bool:
+    """Return True when a chat failure is retryable."""
     if isinstance(exc, ChatConnectionError):
         return True
     if isinstance(exc, ChatQuotaError):
@@ -30,7 +33,10 @@ def is_chat_transient(exc: Exception) -> bool:
 
 
 class DeepSeekClient:
+    """Async client for DeepSeek chat completions."""
+
     def __init__(self, client: AsyncOpenAI | None = None, model: str | None = None) -> None:
+        """Wrap an existing ``AsyncOpenAI`` client, or build one from settings."""
         settings = get_settings()
         if client is not None:
             self._client = client
@@ -48,6 +54,12 @@ class DeepSeekClient:
         *,
         sleep=None,
     ) -> str:
+        """Send a chat completion and return the assistant's text.
+
+        Raises :class:`ChatError` subclasses on failures; transient errors are
+        retried with backoff. ``sleep`` is injectable for testing.
+        """
+
         async def call() -> str:
             try:
                 response = await self._client.chat.completions.create(
@@ -65,12 +77,14 @@ class DeepSeekClient:
 
 
 def _map_status_error(exc: APIStatusError) -> ChatError:
+    """Map an OpenAI API status error to a :class:`ChatError` subtype."""
     if exc.status_code == 429:
         return ChatQuotaError(f"quota or rate limit exceeded: {exc.message}")
     return ChatError(f"chat API error {exc.status_code}: {exc.message}")
 
 
 def _extract_content(response: ChatCompletion) -> str:
+    """Extract the assistant message text, rejecting empty completions."""
     content = response.choices[0].message.content
     if not content:
         raise ChatError("chat completion returned empty content")

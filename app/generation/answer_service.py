@@ -1,3 +1,5 @@
+"""Grounds LLM answers in retrieved source excerpts."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,6 +17,8 @@ SYSTEM_PROMPT = (
 
 @dataclass(frozen=True)
 class Source:
+    """A cited source backing part of an answer."""
+
     chunk_id: str
     doc_id: str
     doc_name: str
@@ -24,16 +28,27 @@ class Source:
 
 @dataclass(frozen=True)
 class Answer:
+    """A generated answer plus the sources it used."""
+
     answer: str
     sources: list[Source]
 
 
 class AnswerService:
+    """Generates citations-aware answers from retrieved chunks."""
+
     def __init__(self, chat_client: DeepSeekClient, sleep=None) -> None:
+        """Bind to a chat client; ``sleep`` is injectable for testing."""
         self._chat_client = chat_client
         self._sleep = sleep
 
     async def answer(self, question: str, chunks: list[RetrievedChunk]) -> Answer:
+        """Answer ``question`` strictly from ``chunks``.
+
+        Returns the no-sources answer when ``chunks`` is empty. The model is
+        asked to answer only from the provided excerpts, and every chunk is
+        returned as a :class:`Source` for citation.
+        """
         if not chunks:
             return Answer(answer=NO_SOURCES_MESSAGE, sources=[])
 

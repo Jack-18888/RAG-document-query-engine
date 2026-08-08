@@ -1,3 +1,5 @@
+"""Embedding and vector-store client services."""
+
 from app.embeddings.embedding_service import (
     BATCH_SIZE,
     DIMENSION,

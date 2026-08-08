@@ -1,3 +1,5 @@
+"""SQLite repository for document chunks."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,6 +10,8 @@ from app.storage import db
 
 @dataclass(frozen=True)
 class Chunk:
+    """An indexed chunk of a document."""
+
     id: str
     doc_id: str
     chunk_index: int
@@ -16,6 +20,7 @@ class Chunk:
 
 
 def _row_to_chunk(row: Any) -> Chunk:
+    """Convert an aiosqlite row into a :class:`Chunk`."""
     return Chunk(
         id=row["id"],
         doc_id=row["doc_id"],
@@ -26,6 +31,7 @@ def _row_to_chunk(row: Any) -> Chunk:
 
 
 async def insert_many(chunks: list[Chunk]) -> None:
+    """Insert multiple chunks in one transaction."""
     conn = db.get_connection()
     await conn.executemany(
         "INSERT INTO chunks (id, doc_id, chunk_index, text, tokens) VALUES (?, ?, ?, ?, ?)",
@@ -35,6 +41,7 @@ async def insert_many(chunks: list[Chunk]) -> None:
 
 
 async def count_by_document(doc_id: str) -> int:
+    """Count the chunks indexed for a document."""
     conn = db.get_connection()
     async with conn.execute("SELECT COUNT(*) FROM chunks WHERE doc_id = ?", (doc_id,)) as cursor:
         row = await cursor.fetchone()
@@ -42,6 +49,7 @@ async def count_by_document(doc_id: str) -> int:
 
 
 async def list_by_document(doc_id: str) -> list[Chunk]:
+    """Return all chunks of a document in index order."""
     conn = db.get_connection()
     async with conn.execute(
         "SELECT id, doc_id, chunk_index, text, tokens FROM chunks "
@@ -53,6 +61,7 @@ async def list_by_document(doc_id: str) -> list[Chunk]:
 
 
 async def get_by_ids(chunk_ids: list[str]) -> list[Chunk]:
+    """Fetch chunks by id, preserving the order of ``chunk_ids``."""
     if not chunk_ids:
         return []
     conn = db.get_connection()
@@ -67,6 +76,7 @@ async def get_by_ids(chunk_ids: list[str]) -> list[Chunk]:
 
 
 async def delete_by_document(doc_id: str) -> None:
+    """Delete all chunks belonging to a document."""
     conn = db.get_connection()
     await conn.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
     await conn.commit()

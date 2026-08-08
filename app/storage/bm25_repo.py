@@ -1,3 +1,5 @@
+"""BM25 keyword search over the SQLite FTS5 index."""
+
 from __future__ import annotations
 
 import re
@@ -8,6 +10,11 @@ _WHITESPACE = re.compile(r"\s+")
 
 
 def _fts_query(text: str) -> str | None:
+    """Build an FTS5 MATCH query from ``text``, or None if it has no terms.
+
+    Each whitespace-separated term is double-quoted (with embedded quotes
+    escaped) so it is matched as a literal phrase rather than parsed syntax.
+    """
     terms = _WHITESPACE.split(text.strip())
     terms = [term for term in terms if term]
     if not terms:
@@ -16,6 +23,7 @@ def _fts_query(text: str) -> str | None:
 
 
 async def search(text: str, k: int = 10) -> list[str]:
+    """Return the top ``k`` chunk ids ranked by BM25 relevance for ``text``."""
     query = _fts_query(text)
     if query is None:
         return []

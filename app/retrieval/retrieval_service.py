@@ -1,3 +1,5 @@
+"""Hybrid retrieval: vector + BM25 fusion followed by hosted reranking."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,6 +21,8 @@ NO_SOURCES_MESSAGE = "No relevant sources found in the library."
 
 @dataclass(frozen=True)
 class RetrievedChunk:
+    """A retrieved chunk with citation metadata and relevance score."""
+
     chunk_id: str
     doc_id: str
     doc_name: str
@@ -31,11 +35,21 @@ class RetrievalError(Exception):
 
 
 class RetrievalService:
+    """Runs the hybrid retrieval pipeline for a question."""
+
     def __init__(self, client: PineconeClient, sleep=None) -> None:
+        """Bind to a Pinecone client; ``sleep`` is injectable for testing."""
         self._client = client
         self._sleep = sleep
 
     async def retrieve(self, question: str) -> list[RetrievedChunk]:
+        """Retrieve the most relevant chunks for ``question``.
+
+        Pipeline: embed the question, query Pinecone, run BM25 over the FTS
+        index, fuse both rankings with RRF, load the fused candidate chunks,
+        then rerank them with the hosted reranker. Returns an empty list when
+        nothing relevant is found.
+        """
         embeddings = EmbeddingService(self._client, sleep=self._sleep)
         vector_repo = VectorRepository(self._client, sleep=self._sleep)
         reranker = Reranker(self._client, sleep=self._sleep)

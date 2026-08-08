@@ -1,3 +1,5 @@
+"""Retrieval pipeline: vector search, BM25, fusion, and reranking."""
+
 from app.retrieval.fusion import RRF_K, reciprocal_rank_fusion
 from app.retrieval.reranker import MODEL, Reranker, RerankerError, RerankResult
 from app.retrieval.retrieval_service import (

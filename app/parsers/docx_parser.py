@@ -1,3 +1,5 @@
+"""Parser for ``.docx`` files built on python-docx."""
+
 from __future__ import annotations
 
 import re
@@ -17,6 +19,7 @@ _TITLE_STYLES = {"title", "subtitle"}
 
 
 def _heading_level(paragraph: Paragraph) -> int | None:
+    """Return the 1-based heading level for a paragraph, or None if it is body text."""
     style = paragraph.style
     if style is not None:
         name = (style.name or "").strip()
@@ -32,6 +35,7 @@ def _heading_level(paragraph: Paragraph) -> int | None:
 
 
 def _iter_body_items(doc: Document):
+    """Yield the document body's top-level paragraphs and tables in order."""
     parent = doc._body
     for child in parent._element.iterchildren():
         if child.tag == qn("w:p"):
@@ -41,6 +45,7 @@ def _iter_body_items(doc: Document):
 
 
 def _table_to_blocks(table: Table) -> list[TextParagraph]:
+    """Flatten a table into one paragraph per non-empty row (cells joined by " | ")."""
     blocks: list[TextParagraph] = []
     for row in table.rows:
         cells = [cell.text.strip() for cell in row.cells]
@@ -51,6 +56,7 @@ def _table_to_blocks(table: Table) -> list[TextParagraph]:
 
 
 def _parse_docx(doc: Document) -> ParsedDocument:
+    """Convert a python-docx ``Document`` into heading/paragraph blocks."""
     blocks: list[Heading | TextParagraph] = []
     for item in _iter_body_items(doc):
         if isinstance(item, Paragraph):
@@ -72,7 +78,13 @@ def _parse_docx(doc: Document) -> ParsedDocument:
 
 @register("docx")
 class DocxParser(Parser):
+    """Parse ``.docx`` documents into headings and paragraphs."""
+
     def parse(self, path: Path) -> ParsedDocument:
+        """Read and normalize the ``.docx`` file at ``path``.
+
+        Raises :class:`ParserError` when the file cannot be read.
+        """
         try:
             doc = Document(str(path))
         except Exception as exc:

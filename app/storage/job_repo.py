@@ -1,3 +1,5 @@
+"""SQLite repository for ingestion jobs."""
+
 from __future__ import annotations
 
 import uuid
@@ -6,18 +8,23 @@ from typing import Any
 
 from app.storage import db
 
+# Sentinel used so callers can distinguish "not provided" (keep current value)
+# from an explicit request to clear (pass None).
 _SENTINEL = "Application Error"
 
 
 def _utc_now_iso() -> str:
+    """Return the current UTC time as an ISO-8601 string."""
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _generate_id() -> str:
+    """Return a new unique job id."""
     return f"job_{uuid.uuid4().hex[:12]}"
 
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
+    """Convert an aiosqlite row into a plain dict."""
     return {
         "id": row["id"],
         "document_id": row["document_id"],
@@ -31,6 +38,7 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
 
 
 async def create(document_id: str) -> dict[str, Any]:
+    """Insert a new job for ``document_id`` starting in the ``parsing`` stage."""
     conn = db.get_connection()
     job_id = _generate_id()
     now = _utc_now_iso()
@@ -54,6 +62,7 @@ async def create(document_id: str) -> dict[str, Any]:
 
 
 async def get(job_id: str) -> dict[str, Any] | None:
+    """Return the job record, or None if it does not exist."""
     conn = db.get_connection()
     async with conn.execute(
         "SELECT id, document_id, stage, chunks_processed, chunks_total, error_message, "
@@ -74,6 +83,11 @@ async def update(
     chunks_total: int | None = None,
     error_message: str | None = _SENTINEL,
 ) -> dict[str, Any] | None:
+    """Update any of a job's progress fields; None if the job is unknown.
+
+    Only fields that are not None (or, for ``error_message``, not the sentinel)
+    are applied; ``error_message=None`` clears an error.
+    """
     existing = await get(job_id)
     if existing is None:
         return None

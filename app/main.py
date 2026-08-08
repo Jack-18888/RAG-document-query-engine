@@ -1,3 +1,5 @@
+"""FastAPI application entry point and app factory."""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -13,6 +15,7 @@ from app.storage import db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Set up the database and ingestion worker on startup, tear down on shutdown."""
     await db.open_database()  # startup: init schema + open connection, set _connection
     executor = JobExecutor(max_workers=get_settings().job_max_workers)
     app.state.job_executor = executor
@@ -26,6 +29,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    """Build and configure the FastAPI application with all routers."""
     app = FastAPI(title="RAG Document Query Engine", lifespan=lifespan)
     app.include_router(health_router)
     app.include_router(documents_router)

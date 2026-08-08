@@ -1,3 +1,5 @@
+"""Parser for ``.html``/``.htm`` files built on the stdlib HTMLParser."""
+
 from __future__ import annotations
 
 from html.parser import HTMLParser
@@ -11,6 +13,8 @@ _HEADING_LEVELS = {f"h{i}": i for i in range(1, 7)}
 
 
 class _ContentExtractor(HTMLParser):
+    """SAX-style extractor that gathers headings and paragraphs as text."""
+
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.blocks: list[Heading | Paragraph] = []
@@ -20,6 +24,7 @@ class _ContentExtractor(HTMLParser):
         self._current_heading: int | None = None
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        """Track ignored subtrees, pending headings, and block boundaries."""
         if tag in _IGNORED_TAGS:
             self._ignore_depth += 1
         elif tag in _HEADING_LEVELS:
@@ -44,6 +49,7 @@ class _ContentExtractor(HTMLParser):
                 self._text.append(text)
 
     def _flush_text(self) -> None:
+        """Emit the accumulated text as a heading or paragraph block."""
         text = " ".join(self._text).strip()
         self._text = []
         if not text:
@@ -57,7 +63,10 @@ class _ContentExtractor(HTMLParser):
 @register("html")
 @register("htm")
 class HtmlParser(Parser):
+    """Parse HTML documents into headings and paragraphs."""
+
     def parse(self, path: Path) -> ParsedDocument:
+        """Read and normalize the HTML file at ``path``."""
         content = path.read_text(encoding="utf-8", errors="replace")
         extractor = _ContentExtractor()
         extractor.feed(content)

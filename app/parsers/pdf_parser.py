@@ -1,3 +1,5 @@
+"""Parser for ``.pdf`` files built on pypdf."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,6 +12,7 @@ from app.parsers.registry import register
 
 
 def _group_paragraphs(lines: list[str]) -> list[str]:
+    """Merge consecutive non-empty lines into paragraphs, split on blank lines."""
     paragraphs: list[str] = []
     current: list[str] = []
     for line in lines:
@@ -27,7 +30,14 @@ def _group_paragraphs(lines: list[str]) -> list[str]:
 
 @register("pdf")
 class PdfParser(Parser):
+    """Parse PDF documents into paragraphs (headings are not detected)."""
+
     def parse(self, path: Path) -> ParsedDocument:
+        """Extract text from the PDF file at ``path``.
+
+        Raises :class:`ParserError` when the file cannot be read or its text
+        cannot be extracted.
+        """
         try:
             reader = PdfReader(str(path))
         except PdfReadError as exc:

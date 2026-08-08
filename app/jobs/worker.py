@@ -1,3 +1,5 @@
+"""Background ingestion worker: parse, chunk, embed, and index documents."""
+
 from __future__ import annotations
 
 import asyncio
@@ -13,6 +15,11 @@ from app.storage import chunk_repo, document_repo, job_repo
 
 
 async def ingest_job(job_id: str, document_path: Path) -> None:
+    """Run one ingestion job end to end, updating job/document status.
+
+    Pipeline stages: parsing, chunking, embedding, indexing, succeeded. Any
+    parse or hosted-API failure marks both the job and its document as failed.
+    """
     job = await job_repo.get(job_id)
     if job is None:
         return
@@ -51,20 +58,26 @@ async def ingest_job(job_id: str, document_path: Path) -> None:
 
 
 async def _fail(job_id: str, doc_id: str, message: str) -> None:
+    """Mark both the document and its job as failed with the same message."""
     await document_repo.update(doc_id, status="failed", error_message=message)
     await job_repo.update(job_id, stage="failed", error_message=message)
 
 
 def _run_ingest(job_id: str, document_path: Path) -> None:
+    """Thread-pool entrypoint that runs the async ingestion in a fresh loop."""
     asyncio.run(ingest_job(job_id, document_path))
 
 
 class JobExecutor:
+    """Dispatches ingestion jobs to a bounded background thread pool."""
+
     def __init__(self, max_workers: int) -> None:
         self._pool = ThreadPoolExecutor(max_workers=max_workers)
 
     def enqueue(self, job_id: str, document_path: Path) -> None:
+        """Submit an ingestion job for background execution."""
         self._pool.submit(_run_ingest, job_id, document_path)
 
     def shutdown(self) -> None:
+        """Wait for in-flight jobs to finish and stop the pool."""
         self._pool.shutdown(wait=True)

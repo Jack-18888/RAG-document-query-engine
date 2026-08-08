@@ -1,3 +1,5 @@
+"""Question-answering endpoints backed by retrieval and generation services."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
@@ -13,6 +15,13 @@ router = APIRouter(tags=["queries"])
 
 @router.post("/queries", response_model=QueryResponse)
 async def query_documents(payload: QueryRequest) -> QueryResponse:
+    """Answer a question using the retrieved library sources.
+
+    Retrieves candidate chunks (vector + BM25 fused and reranked), then asks
+    the LLM to answer strictly from those excerpts. Returns the answer with
+    source citations, or a "no sources" message when nothing relevant is found.
+    Raises 400 for empty questions and 503 if retrieval or generation fails.
+    """
     question = payload.question.strip()
     if not question:
         raise HTTPException(status_code=400, detail="question must not be empty")

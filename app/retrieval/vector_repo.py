@@ -1,3 +1,5 @@
+"""Pinecone vector index repository with batching and retry."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -13,7 +15,10 @@ class VectorRepositoryError(Exception):
 
 
 class VectorRepository:
+    """Reads and writes document chunks in the Pinecone index."""
+
     def __init__(self, client: PineconeClient, sleep=None) -> None:
+        """Bind to a Pinecone client; ``sleep`` is injectable for testing."""
         self._client = client
         self._sleep = sleep
 
@@ -23,6 +28,10 @@ class VectorRepository:
         vectors: list[list[float]],
         doc_id: str,
     ) -> None:
+        """Insert or update vectors for ``chunk_ids`` in batches of 100.
+
+        Raises :class:`VectorRepositoryError` on length mismatch or failure.
+        """
         if len(chunk_ids) != len(vectors):
             raise VectorRepositoryError("chunk_ids and vectors must be the same length")
         index = await self._client.index()
@@ -49,6 +58,7 @@ class VectorRepository:
         vector: list[float],
         top_k: int = 10,
     ) -> list[dict[str, Any]]:
+        """Return the top ``top_k`` matches for ``vector`` with metadata."""
         index = await self._client.index()
 
         async def call() -> Any:
@@ -76,6 +86,7 @@ class VectorRepository:
         return results
 
     async def delete_by_document(self, doc_id: str) -> None:
+        """Delete every vector belonging to ``doc_id``."""
         index = await self._client.index()
 
         async def call() -> None:

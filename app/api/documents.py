@@ -1,3 +1,5 @@
+"""Document lifecycle endpoints: upload, list, get, delete, and reindex."""
+
 from __future__ import annotations
 
 import os
@@ -25,16 +27,23 @@ router = APIRouter(tags=["documents"])
 
 
 def _executor(request: Request) -> JobExecutor:
+    """Dependency that resolves the shared job executor from app state."""
     return request.app.state.job_executor
 
 
 def _stored_path(doc_id: str, filename: str) -> Path:
+    """Resolve the on-disk location of an uploaded original file."""
     settings = get_settings()
     ext = Path(filename).suffix.lower()
     return Path(settings.upload_dir) / f"{doc_id}{ext}"
 
 
 async def _stream_to_temp(file: UploadFile) -> tuple[Path, int]:
+    """Stream an upload to a temp file, enforcing size and non-empty limits.
+
+    Returns the temp file path and its size in bytes. Raises HTTP 413 for
+    oversized uploads and HTTP 400 for empty files.
+    """
     settings = get_settings()
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
@@ -67,6 +76,13 @@ async def upload_document(
     file: Annotated[UploadFile, FileParam()],
     executor: Annotated[JobExecutor, Depends(_executor)],
 ) -> UploadResponse:
+    """Accept a document, record it and a pending job, and enqueue ingestion.
+
+    The file is first validated (extension + size), then a document row and an
+    ingestion job are created, the file is moved into the uploads directory,
+    and the job is handed to the background executor. Returns 202 with the
+    document and job records.
+    """
     filename = file.filename or ""
     suffix = Path(filename).suffix.lower()
     ext = suffix.lstrip(".")
@@ -90,12 +106,14 @@ async def upload_document(
 
 @router.get("/documents", response_model=DocumentListResponse)
 async def list_documents() -> DocumentListResponse:
+    """List all documents, newest first."""
     documents = await document_repo.list_all()
     return DocumentListResponse(documents=[DocumentOut(**d) for d in documents])
 
 
 @router.get("/documents/{doc_id}", response_model=DocumentDetail)
 async def get_document(doc_id: str) -> DocumentDetail:
+    """Return a single document with its chunk count; 404 if unknown."""
     document = await document_repo.get(doc_id)
     if document is None:
         raise HTTPException(status_code=404, detail="document not found")
@@ -105,6 +123,12 @@ async def get_document(doc_id: str) -> DocumentDetail:
 
 @router.delete("/documents/{doc_id}", status_code=204)
 async def delete_document(doc_id: str) -> None:
+    """Remove a document and all of its index data.
+
+    Deletes vectors from Pinecone, then chunks and the document row from
+    SQLite, then the stored original file. Returns 204 on success, 404 if the
+    document is unknown, and 503 if the vector service is unreachable.
+    """
     document = await document_repo.get(doc_id)
     if document is None:
         raise HTTPException(status_code=404, detail="document not found")
@@ -132,6 +156,11 @@ async def reindex_document(
     doc_id: str,
     executor: Annotated[JobExecutor, Depends(_executor)],
 ) -> ReindexResponse:
+    """Reparse and re-embed a document from its stored original.
+
+    Clears the existing vectors and chunks, resets the document to
+    ``pending``, and enqueues a fresh ingestion job.
+    """
     document = await document_repo.get(doc_id)
     if document is None:
         raise HTTPException(status_code=404, detail="document not found")

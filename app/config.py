@@ -1,3 +1,5 @@
+"""Application configuration loaded from environment variables and ``.env``."""
+
 from functools import lru_cache
 
 from pydantic import Field
@@ -5,6 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Runtime settings for the RAG engine.
+
+    Required secrets (Pinecone and DeepSeek API keys) are read from the
+    environment or ``.env``; everything else has sensible defaults.
+    """
+
     pinecone_api_key: str = Field(alias="PINECONE_API_KEY")
     pinecone_index: str = Field(alias="PINECONE_INDEX")
     deepseek_api_key: str = Field(alias="DEEPSEEK_API_KEY")
@@ -23,4 +31,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
+    """Return the application settings, cached after first load."""
     return Settings()
