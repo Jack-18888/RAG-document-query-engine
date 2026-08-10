@@ -13,15 +13,15 @@ Reference for how the engine actually processes documents and queries — the pi
 
 ```
 upload (POST /documents)
-  → create document row (status=pending) + job row (stage=parsing)
-  → save original to data/uploads/
-  → enqueue job → respond 202 with job id (document visible with status=pending)
+  1. create document row (status=pending) + job row (stage=parsing)
+  2. save original to data/uploads/
+  3. enqueue job → respond 202 with job id (document visible with status=pending)
 job worker (thread pool):
-  → stage=parsing    parse by extension (see parsers/)
+  4. stage=parsing    parse by extension (see parsers/)
         parse failure → status=failed (fail fast, no retry)
-  → stage=chunking   structure-aware chunking (see chunking rules)
-  → stage=embedding  embed chunks via Pinecone inference, `input_type=passage`, batch size ~32 (model limit 96), sequential batches
-  → stage=indexing   upsert vectors into Pinecone (batch ~100), then insert chunk rows + FTS5 rows in SQLite, mark doc status=indexed, job stage=succeeded
+  5. stage=chunking   structure-aware chunking (see chunking rules)
+  6. stage=embedding  embed chunks via Pinecone inference, `input_type=passage`, batch size ~32 (model limit 96), sequential batches
+  7. stage=indexing   upsert vectors into Pinecone (batch ~100), then insert chunk rows + FTS5 rows in SQLite, mark doc status=indexed, job stage=succeeded
 ```
 
 - Document exposes `status` (user-facing: `pending` / `indexed` / `failed`); job holds progress detail (`stage`: `parsing` / `chunking` / `embedding` / `indexing` / `succeeded` / `failed`, plus `chunks_processed` / `chunks_total` and `error_message`).
@@ -47,14 +47,14 @@ job worker (thread pool):
 
 ```
 POST /queries
-  → embed question via Pinecone inference (`input_type=query`, 1024-dim)
-  → vector search:        top 10 by cosine similarity (Pinecone, filtered by nothing — whole library)
-  → BM25 search:          top 10 by FTS5 (SQLite)
-  → fusion:               Reciprocal Rank Fusion (RRF, k=60) over the union; take top 20
-  → rerank:               hosted bge-reranker-v2-m3 over the fused top 20 (top_n=3, rank_fields=["text"], truncate=END)
-  → keep top 3            chunks as context
-  → chat completion       DeepSeek (`deepseek-v4-flash`, non-thinking, OpenAI-compatible), system prompt + the 3 chunks + question
-  → respond               answer text + structured source list
+  1. embed question via Pinecone inference (`input_type=query`, 1024-dim)
+  2. vector search:        top 10 by cosine similarity (Pinecone, filtered by nothing — whole library)
+  3. BM25 search:          top 10 by FTS5 (SQLite) [note: step 1, 2 and 3 runs concurrently]
+  4. fusion:               Reciprocal Rank Fusion (RRF, k=60) over the union; take top 20
+  5. rerank:               hosted bge-reranker-v2-m3 over the fused top 20 (top_n=3, rank_fields=["text"], truncate=END)
+  6. keep top 3            chunks as context
+  7. chat completion       DeepSeek (`deepseek-v4-flash`, non-thinking, OpenAI-compatible), system prompt + the 3 chunks + question
+  8. respond               answer text + structured source list
 ```
 
 - **Fusion:** RRF score = Σ 1/(k + rank), k = 60. No score normalization needed; order-independent across BM25/vector score scales.

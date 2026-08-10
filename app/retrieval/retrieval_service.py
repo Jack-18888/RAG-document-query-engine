@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 from app.embeddings.embedding_service import INPUT_TYPE_QUERY, EmbeddingService
@@ -54,11 +55,15 @@ class RetrievalService:
         vector_repo = VectorRepository(self._client, sleep=self._sleep)
         reranker = Reranker(self._client, sleep=self._sleep)
 
-        query_vector = (await embeddings.embed([question], INPUT_TYPE_QUERY))[0]
-        vector_matches = await vector_repo.query(query_vector, top_k=VECTOR_TOP_K)
-        vector_ids = [match["chunk_id"] for match in vector_matches]
+        async def _get_vector_matches():
+            query_vector = (await embeddings.embed([question], INPUT_TYPE_QUERY))[0]
+            return await vector_repo.query(query_vector, top_k=VECTOR_TOP_K)
 
-        bm25_ids = await bm25_repo.search(question, k=BM25_TOP_K)
+        vector_matches, bm25_ids = await asyncio.gather(
+            _get_vector_matches(), bm25_repo.search(question, k=BM25_TOP_K)
+        )
+
+        vector_ids = [match["chunk_id"] for match in vector_matches]
 
         fused = reciprocal_rank_fusion([vector_ids, bm25_ids])[:FUSION_TOP_K]
         if not fused:
