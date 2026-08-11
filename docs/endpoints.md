@@ -4,7 +4,7 @@ Reference contract for the REST API. All routes are served at the root; errors u
 
 ## Conventions
 
-- IDs: `doc_<12-hex>` and `job_<12-hex>` (truncated UUID hex); chunk ids are deterministic `chunk_<doc_id>_<index>`.
+- IDs: `doc_<12-hex>`, `job_<12-hex>`, and `query_<12-hex>` (truncated UUID hex); chunk ids are deterministic `chunk_<doc_id>_<index>`.
 - Timestamps: ISO-8601 UTC strings.
 - Documents have a user-facing `status`; jobs carry stage-level progress.
 - Upload size limit: 50 MB per file (configurable via settings).
@@ -90,22 +90,45 @@ Runs the pipeline again on the stored original (no re-upload). Old vectors are c
 
 ### `POST /queries` — ask a question
 
-Body: `{ "question": "<string>" }`. Synchronous — blocks until the answer is generated (may take tens of seconds; the frontend should show a loading state).
+Body: `{ "question": "<string>" }`. Synchronous — blocks until the answer is generated (may take tens of seconds; the frontend should show a loading state). Every answered query (including the no-sources case) is persisted to SQLite along with the chunks that were fetched for it.
 
-- **200** — answer plus structured sources (the top 3 reranked chunks):
+- **200** — answer plus structured sources (the top 3 reranked chunks) and the new query's metadata:
 
 ```json
 {
+  "id": "query_ab12cd34ef56",
+  "question": "What is the retention period?",
   "answer": "The retention policy requires invoices to be kept for 7 years.",
+  "created_at": "2026-08-02T10:00:00Z",
   "sources": [
     { "chunk_id": "chunk_doc_a1b2c3_0", "doc_id": "doc_a1b2c3", "doc_name": "report.pdf", "excerpt": "Invoices must be retained for a period of 7 years...", "score": 0.89 }
   ]
 }
 ```
 
-- **200, no sources found** — no LLM call is made; `answer` is a canned message ("No relevant sources found in the library.") and `sources` is empty.
+- **200, no sources found** — no LLM call is made; `answer` is a canned message ("No relevant sources found in the library."), `sources` is empty, and the query is still stored.
 - **400** — missing or empty `question`.
-- **503** — a required hosted service (Pinecone/DeepSeek) is unavailable; includes a retryable detail message.
+- **503** — a required hosted service (Pinecone/DeepSeek) is unavailable; includes a retryable detail message. Failed queries are **not** persisted.
+
+### `GET /queries` — list queries
+
+- **200** — all stored queries, newest first (lightweight: id, question, created_at; use the detail endpoint for answers/sources):
+
+```json
+{ "queries": [ { "id": "query_ab12cd34ef56", "question": "What is the retention period?", "created_at": "..." } ] }
+```
+
+### `GET /queries/{id}` — query detail
+
+- **200** — full query (id, question, answer, created_at) plus `sources`, reconstructed by joining `query_chunks` → `chunks` → `documents`. A chunk that has since been deleted is omitted.
+- **404** — unknown id.
+
+### `DELETE /queries/{id}` — delete a query
+
+Deletes the query row and its `query_chunks` relations.
+
+- **204** — deleted.
+- **404** — unknown id.
 
 ### `GET /health` — liveness
 
