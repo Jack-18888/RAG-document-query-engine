@@ -15,6 +15,7 @@ def test_all_contract_endpoints_registered():
     assert "/documents/{doc_id}/reindex" in paths
     assert "/jobs/{job_id}" in paths
     assert "/queries" in paths
+    assert "/queries/{query_id}" in paths
 
 
 def test_health_no_external_calls(client):

@@ -31,7 +31,7 @@ async def test_init_db_creates_tables_and_fts(tmp_path) -> None:
             )
         }
 
-    assert {"documents", "chunks", "jobs", "chunks_fts"} <= tables
+    assert {"documents", "chunks", "jobs", "chunks_fts", "queries", "query_chunks"} <= tables
     assert {"chunks_auto_insert", "chunks_auto_delete", "chunks_auto_update"} <= triggers
 
 
@@ -67,6 +67,17 @@ async def test_init_db_creates_expected_columns(tmp_path) -> None:
             "created_at",
             "updated_at",
         }
+        assert await _columns(conn, "queries") == {
+            "id",
+            "question",
+            "answer",
+            "created_at",
+        }
+        assert await _columns(conn, "query_chunks") == {
+            "query_id",
+            "chunk_id",
+            "score",
+        }
 
 
 async def test_init_db_is_idempotent(tmp_path) -> None:
@@ -77,10 +88,18 @@ async def test_init_db_is_idempotent(tmp_path) -> None:
     async with aiosqlite.connect(db_path) as conn:
         counts = await conn.execute_fetchall(
             "SELECT name, count(*) FROM sqlite_master "
-            "WHERE type='table' AND name IN ('documents', 'chunks', 'jobs', 'chunks_fts') "
+            "WHERE type='table' AND name IN "
+            "('documents', 'chunks', 'jobs', 'chunks_fts', 'queries', 'query_chunks') "
             "GROUP BY name"
         )
-    assert {row[0] for row in counts} == {"documents", "chunks", "jobs", "chunks_fts"}
+    assert {row[0] for row in counts} == {
+        "documents",
+        "chunks",
+        "jobs",
+        "chunks_fts",
+        "queries",
+        "query_chunks",
+    }
     assert all(row[1] == 1 for row in counts)
 
 
@@ -178,4 +197,4 @@ def test_lifespan_initializes_database(tmp_path, monkeypatch) -> None:
         tables = {
             row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
-    assert {"documents", "chunks", "jobs", "chunks_fts"} <= tables
+    assert {"documents", "chunks", "jobs", "chunks_fts", "queries", "query_chunks"} <= tables

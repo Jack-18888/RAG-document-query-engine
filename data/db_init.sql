@@ -64,6 +64,25 @@ CREATE TABLE IF NOT EXISTS jobs (
     FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 
+-- Queries (question + generated answer)
+CREATE TABLE IF NOT EXISTS queries (
+    id TEXT PRIMARY KEY,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Which chunks were fetched for each query (query-specific rerank score)
+CREATE TABLE IF NOT EXISTS query_chunks (
+    query_id TEXT NOT NULL,
+    chunk_id TEXT NOT NULL,
+    score REAL NOT NULL,
+    PRIMARY KEY (query_id, chunk_id),
+    FOREIGN KEY (query_id) REFERENCES queries(id) ON DELETE CASCADE,
+    FOREIGN KEY (chunk_id) REFERENCES chunks(id) ON DELETE CASCADE
+);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_chunks_doc_id ON chunks(doc_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_document_id ON jobs(document_id);
+CREATE INDEX IF NOT EXISTS idx_query_chunks_chunk_id ON query_chunks(chunk_id);

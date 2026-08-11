@@ -73,7 +73,31 @@ class SourceOut(BaseModel):
 
 
 class QueryResponse(BaseModel):
-    """An answer plus the sources it was derived from."""
+    """An answer plus the sources it was derived from and query metadata."""
+
+    id: str
+    question: str
+    answer: str
+    created_at: str
+    sources: list[SourceOut]
+
+
+class QueryOut(BaseModel):
+    """Summary of a stored query."""
+
+    id: str
+    question: str
+    created_at: str
+
+
+class QueryListResponse(BaseModel):
+    """List of stored queries, newest first."""
+
+    queries: list[QueryOut]
+
+
+class QueryDetail(QueryOut):
+    """A stored query plus its answer and cited sources."""
 
     answer: str
     sources: list[SourceOut]
