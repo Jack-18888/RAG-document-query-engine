@@ -5,6 +5,10 @@ target-version = "py314"
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+include = ["app"]
+exclude = ["**/node_modules", "**/__pycache__", "**/.pytest_cache", "**/.ruff_cache", ".venv"]
+typeCheckingMode = "strict"
+pythonVersion = "3.14.6"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

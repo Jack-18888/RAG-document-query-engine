@@ -12,6 +12,7 @@ from app.api.schemas import (
     QueryResponse,
     SourceOut,
 )
+from app.generation.answer_service import Source
 from app.embeddings.pinecone_client import get_pinecone_client
 from app.generation.answer_service import AnswerService
 from app.generation.deepseek_client import DeepSeekClient
@@ -21,7 +22,7 @@ from app.storage import query_repo
 router = APIRouter(tags=["queries"])
 
 
-def _to_sources(sources: list) -> list[SourceOut]:
+def _to_sources(sources: list[Source]) -> list[SourceOut]:
     """Convert answer sources into the API schema."""
     return [
         SourceOut(

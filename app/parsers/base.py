@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,7 +35,7 @@ class ParsedDocument:
     """Normalized document content: flat text plus a block list."""
 
     text: str
-    blocks: list[Heading | Paragraph]
+    blocks: Sequence[Heading | Paragraph]
 
 
 class Parser:

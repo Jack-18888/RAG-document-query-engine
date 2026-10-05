@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from app.generation.deepseek_client import DeepSeekClient
@@ -37,7 +38,7 @@ class Answer:
 class AnswerService:
     """Generates citations-aware answers from retrieved chunks."""
 
-    def __init__(self, chat_client: DeepSeekClient, sleep=None) -> None:
+    def __init__(self, chat_client: DeepSeekClient, sleep: Callable[[float], Awaitable[None]] | None = None) -> None:
         """Bind to a chat client; ``sleep`` is injectable for testing."""
         self._chat_client = chat_client
         self._sleep = sleep

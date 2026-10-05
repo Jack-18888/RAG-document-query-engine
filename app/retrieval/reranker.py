@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -26,7 +27,7 @@ class RerankerError(Exception):
 class Reranker:
     """Reranks candidate documents against a query using a hosted model."""
 
-    def __init__(self, client: PineconeClient, sleep=None) -> None:
+    def __init__(self, client: PineconeClient, sleep: Callable[[float], Awaitable[None]] | None = None) -> None:
         """Bind to a Pinecone client; ``sleep`` is injectable for testing."""
         self._client = client
         self._sleep = sleep

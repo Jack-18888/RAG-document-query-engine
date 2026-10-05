@@ -1,3 +1,5 @@
+# pyright: basic
+
 import asyncio
 import time
 
@@ -73,8 +75,8 @@ async def test_full_pipeline_marks_document_indexed(conn, tmp_path, fake_client)
 
     fetched_doc = await document_repo.get(doc["id"])
     fetched_job = await job_repo.get(job["id"])
-    assert fetched_doc["status"] == "indexed"
-    assert fetched_job["stage"] == "succeeded"
+    assert fetched_doc is not None and fetched_doc["status"] == "indexed"
+    assert fetched_job is not None and fetched_job["stage"] == "succeeded"
 
 
 async def test_chunks_stored_after_success(conn, tmp_path, fake_client):
@@ -134,9 +136,9 @@ async def test_parse_failure_fails_job_and_document(conn, tmp_path, fake_client)
 
     fetched_doc = await document_repo.get(doc["id"])
     fetched_job = await job_repo.get(job["id"])
-    assert fetched_doc["status"] == "failed"
+    assert fetched_doc is not None and fetched_doc["status"] == "failed"
     assert fetched_doc["error_message"] is not None
-    assert fetched_job["stage"] == "failed"
+    assert fetched_job is not None and fetched_job["stage"] == "failed"
     assert fetched_job["error_message"] is not None
 
 
@@ -152,8 +154,8 @@ async def test_embed_failure_fails_job(conn, tmp_path, fake_client, monkeypatch)
 
     fetched_doc = await document_repo.get(doc["id"])
     fetched_job = await job_repo.get(job["id"])
-    assert fetched_doc["status"] == "failed"
-    assert fetched_job["stage"] == "failed"
+    assert fetched_doc is not None and fetched_doc["status"] == "failed"
+    assert fetched_job is not None and fetched_job["stage"] == "failed"
 
 
 async def test_upsert_failure_leaves_no_local_chunks(conn, tmp_path, fake_client, monkeypatch):
@@ -169,7 +171,7 @@ async def test_upsert_failure_leaves_no_local_chunks(conn, tmp_path, fake_client
     await ingest_job(job["id"], path)
 
     fetched_doc = await document_repo.get(doc["id"])
-    assert fetched_doc["status"] == "failed"
+    assert fetched_doc is not None and fetched_doc["status"] == "failed"
     assert await chunk_repo.count_by_document(doc["id"]) == 0
 
 
@@ -187,7 +189,7 @@ async def test_executor_runs_job_in_thread_pool(conn, tmp_path, fake_client):
     executor.shutdown()
 
     fetched_doc = await document_repo.get(doc["id"])
-    assert fetched_doc["status"] == "indexed"
+    assert fetched_doc is not None and fetched_doc["status"] == "indexed"
 
 
 async def _job_succeeded(job_id):
