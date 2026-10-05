@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from app.embeddings.pinecone_client import PineconeClient
@@ -23,7 +24,7 @@ class EmbeddingServiceError(Exception):
 class EmbeddingService:
     """Produces dense vector embeddings for text in batches."""
 
-    def __init__(self, client: PineconeClient, sleep=None) -> None:
+    def __init__(self, client: PineconeClient, sleep: Callable[[float], Awaitable[None]] | None = None) -> None:
         """Bind to a Pinecone client; ``sleep`` is injectable for testing."""
         self._client = client
         self._sleep = sleep

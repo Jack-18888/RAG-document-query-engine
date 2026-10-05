@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import mistune
+from typing import Any
 
 from app.parsers.base import Heading, Paragraph, ParsedDocument, Parser
 from app.parsers.registry import register
@@ -12,7 +13,7 @@ from app.parsers.registry import register
 _markdown = mistune.Markdown()
 
 
-def _inline_text(node: dict) -> str:
+def _inline_text(node: dict[str, Any]) -> str:
     """Concatenate the raw text of a node's inline children."""
     parts: list[str] = []
     for child in node.get("children", []):
@@ -23,7 +24,7 @@ def _inline_text(node: dict) -> str:
     return "".join(parts)
 
 
-def _block_text(node: dict) -> str:
+def _block_text(node: dict[str, Any]) -> str:
     """Return a node's rendered text, falling back to raw content."""
     text = _inline_text(node)
     if text:
@@ -31,7 +32,7 @@ def _block_text(node: dict) -> str:
     return node.get("raw", "").strip()
 
 
-def _walk(node: dict, blocks: list[Heading | Paragraph]) -> None:
+def _walk(node: dict[str, Any], blocks: list[Heading | Paragraph]) -> None:
     """Recursively convert a mistune AST node into heading/paragraph blocks."""
     kind = node.get("type")
     if kind == "heading":
@@ -47,7 +48,7 @@ def _walk(node: dict, blocks: list[Heading | Paragraph]) -> None:
     elif kind in {"blockquote", "footnotes"}:
         for child in node.get("children", []):
             if isinstance(child, dict):
-                _walk(child, blocks)
+                _walk(child, blocks) # type: ignore
 
 
 def _parse(text: str) -> ParsedDocument:

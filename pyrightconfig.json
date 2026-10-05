@@ -1,0 +1,6 @@
+{
+  "exclude": ["**/node_modules", "**/__pycache__", "**/.pytest_cache", "**/.ruff_cache", ".venv"],
+  "include": ["app"],
+  "typeCheckingMode": "strict",
+  "pythonVersion": "3.14"
+}

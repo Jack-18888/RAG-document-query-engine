@@ -54,4 +54,6 @@ async def retry_async[T](
             if attempt == attempts - 1:
                 break
             await sleep(BACKOFF_BASE_SECONDS * BACKOFF_MULTIPLIER**attempt)
-    raise last_error
+    if last_error:
+        raise last_error
+    raise Exception("Unknown exception")
