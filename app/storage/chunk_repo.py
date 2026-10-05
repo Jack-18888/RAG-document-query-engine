@@ -45,7 +45,9 @@ async def count_by_document(doc_id: str) -> int:
     conn = db.get_connection()
     async with conn.execute("SELECT COUNT(*) FROM chunks WHERE doc_id = ?", (doc_id,)) as cursor:
         row = await cursor.fetchone()
-    return int(row[0])
+    if row:
+        return int(row[0])
+    return 0
 
 
 async def list_by_document(doc_id: str) -> list[Chunk]:

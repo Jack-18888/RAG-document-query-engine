@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from app.embeddings.embedding_service import INPUT_TYPE_QUERY, EmbeddingService
@@ -38,7 +39,7 @@ class RetrievalError(Exception):
 class RetrievalService:
     """Runs the hybrid retrieval pipeline for a question."""
 
-    def __init__(self, client: PineconeClient, sleep=None) -> None:
+    def __init__(self, client: PineconeClient, sleep: Callable[[float], Awaitable[None]] | None = None) -> None:
         """Bind to a Pinecone client; ``sleep`` is injectable for testing."""
         self._client = client
         self._sleep = sleep

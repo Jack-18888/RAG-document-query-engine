@@ -6,6 +6,8 @@ import asyncio
 from functools import lru_cache
 
 from pinecone import AsyncPinecone
+from pinecone.async_client.inference import AsyncInference
+from pinecone.async_client.async_index import AsyncIndex
 
 from app.config import get_settings
 
@@ -28,12 +30,12 @@ class PineconeClient:
         self._api_key = api_key
         self._index_name = index_name
         self._clients: dict[asyncio.AbstractEventLoop, AsyncPinecone] = {}
-        self._indexes: dict[asyncio.AbstractEventLoop, object] = {}
+        self._indexes: dict[asyncio.AbstractEventLoop, AsyncIndex] = {}
 
     def _loop(self) -> asyncio.AbstractEventLoop:
         return asyncio.get_running_loop()
 
-    async def index(self) -> object:
+    async def index(self) -> AsyncIndex:
         """Return the index handle for the current event loop, caching it."""
         loop = self._loop()
         index = self._indexes.get(loop)
@@ -43,7 +45,7 @@ class PineconeClient:
         self._indexes[loop] = await client.index(name=self._index_name)
         return self._indexes[loop]
 
-    async def inference(self) -> object:
+    async def inference(self) -> AsyncInference:
         """Return the inference client for the current event loop."""
         client = await self._connect()
         return client.inference

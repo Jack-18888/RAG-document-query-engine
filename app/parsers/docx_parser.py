@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 from docx import Document
+from docx.document import Document as DocumentObject
 from docx.oxml.ns import qn
 from docx.table import Table
 from docx.text.paragraph import Paragraph
@@ -34,7 +35,7 @@ def _heading_level(paragraph: Paragraph) -> int | None:
     return None
 
 
-def _iter_body_items(doc: Document):
+def _iter_body_items(doc: DocumentObject):
     """Yield the document body's top-level paragraphs and tables in order."""
     parent = doc._body
     for child in parent._element.iterchildren():
@@ -55,7 +56,7 @@ def _table_to_blocks(table: Table) -> list[TextParagraph]:
     return blocks
 
 
-def _parse_docx(doc: Document) -> ParsedDocument:
+def _parse_docx(doc: DocumentObject) -> ParsedDocument:
     """Convert a python-docx ``Document`` into heading/paragraph blocks."""
     blocks: list[Heading | TextParagraph] = []
     for item in _iter_body_items(doc):
@@ -68,7 +69,7 @@ def _parse_docx(doc: Document) -> ParsedDocument:
                 blocks.append(Heading(level=level, text=text))
             else:
                 blocks.append(TextParagraph(text))
-        elif isinstance(item, Table):
+        else:
             blocks.extend(_table_to_blocks(item))
     return ParsedDocument(
         text="\n\n".join(block.text for block in blocks),

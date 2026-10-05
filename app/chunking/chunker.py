@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from app.parsers.base import Heading, Paragraph, ParsedDocument
+from app.parsers.base import Heading, ParsedDocument
 from app.storage.chunk_repo import Chunk
 
 TARGET_TOKENS = 500
@@ -99,7 +99,7 @@ def chunk_document(
             flush()
             update_heading(block.level, block.text)
             buffer = _make_buffer()
-        elif isinstance(block, Paragraph):
+        else:
             text = block.text.strip()
             if not text:
                 continue
