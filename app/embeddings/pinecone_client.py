@@ -6,8 +6,8 @@ import asyncio
 from functools import lru_cache
 
 from pinecone import AsyncPinecone
-from pinecone.async_client.inference import AsyncInference
 from pinecone.async_client.async_index import AsyncIndex
+from pinecone.async_client.inference import AsyncInference
 
 from app.config import get_settings
 

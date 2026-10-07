@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import mistune
-from typing import Any
 
 from app.parsers.base import Heading, Paragraph, ParsedDocument, Parser
 from app.parsers.registry import register
@@ -48,7 +48,7 @@ def _walk(node: dict[str, Any], blocks: list[Heading | Paragraph]) -> None:
     elif kind in {"blockquote", "footnotes"}:
         for child in node.get("children", []):
             if isinstance(child, dict):
-                _walk(child, blocks) # type: ignore
+                _walk(child, blocks)  # type: ignore
 
 
 def _parse(text: str) -> ParsedDocument:

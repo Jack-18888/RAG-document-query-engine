@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from typing import cast
+
 from openai import APIConnectionError, APIStatusError, AsyncOpenAI
 from openai.types.chat import ChatCompletion, ChatCompletionMessageParam
-from typing import cast
 
 from app.config import get_settings
 from app.retry import retry_async
@@ -66,7 +67,9 @@ class DeepSeekClient:
             try:
                 response = await self._client.chat.completions.create(
                     model=self._model,
-                    messages=[cast(ChatCompletionMessageParam, raw_message) for raw_message in messages],
+                    messages=[
+                        cast(ChatCompletionMessageParam, raw_message) for raw_message in messages
+                    ],
                     extra_body={"thinking": {"type": "disabled"}},
                 )
             except APIConnectionError as exc:

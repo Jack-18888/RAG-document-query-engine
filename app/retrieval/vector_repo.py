@@ -18,7 +18,9 @@ class VectorRepositoryError(Exception):
 class VectorRepository:
     """Reads and writes document chunks in the Pinecone index."""
 
-    def __init__(self, client: PineconeClient, sleep: Callable[[float], Awaitable[None]] | None = None) -> None:
+    def __init__(
+        self, client: PineconeClient, sleep: Callable[[float], Awaitable[None]] | None = None
+    ) -> None:
         """Bind to a Pinecone client; ``sleep`` is injectable for testing."""
         self._client = client
         self._sleep = sleep

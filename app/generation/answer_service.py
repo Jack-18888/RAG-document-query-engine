@@ -38,7 +38,9 @@ class Answer:
 class AnswerService:
     """Generates citations-aware answers from retrieved chunks."""
 
-    def __init__(self, chat_client: DeepSeekClient, sleep: Callable[[float], Awaitable[None]] | None = None) -> None:
+    def __init__(
+        self, chat_client: DeepSeekClient, sleep: Callable[[float], Awaitable[None]] | None = None
+    ) -> None:
         """Bind to a chat client; ``sleep`` is injectable for testing."""
         self._chat_client = chat_client
         self._sleep = sleep

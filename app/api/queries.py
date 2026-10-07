@@ -12,9 +12,8 @@ from app.api.schemas import (
     QueryResponse,
     SourceOut,
 )
-from app.generation.answer_service import Source
 from app.embeddings.pinecone_client import get_pinecone_client
-from app.generation.answer_service import AnswerService
+from app.generation.answer_service import AnswerService, Source
 from app.generation.deepseek_client import DeepSeekClient
 from app.retrieval.retrieval_service import NO_SOURCES_MESSAGE, RetrievalService
 from app.storage import query_repo
